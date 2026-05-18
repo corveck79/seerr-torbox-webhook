@@ -17,7 +17,7 @@ def _rank(streams, prefer_season_pack: bool = False):
 
 def _fetch_movie_candidates(req: MediaRequest) -> list:
     if ZILEAN_ENABLED:
-        streams = zilean.fetch_streams(req.title)
+        streams = zilean.fetch_streams(req.imdb_id)
         candidates = _rank(streams)
         if candidates:
             log.info("Zilean found %d candidate(s) for movie %s", len(candidates), req.title)
@@ -29,7 +29,7 @@ def _fetch_movie_candidates(req: MediaRequest) -> list:
 
 def _fetch_season_candidates(req: MediaRequest, season: int, episode: int, prefer_season_pack: bool = False) -> list:
     if ZILEAN_ENABLED:
-        streams = zilean.fetch_streams(req.title, season=season, episode=episode)
+        streams = zilean.fetch_streams(req.imdb_id, season=season, episode=episode)
         candidates = _rank(streams, prefer_season_pack=prefer_season_pack)
         if candidates:
             log.info("Zilean found %d candidate(s) for %s S%02dE%02d", len(candidates), req.title, season, episode)

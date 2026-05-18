@@ -3,44 +3,70 @@ import logging
 import requests
 
 from config import ZILEAN_URL
-from torrentio import TorrentioStream, _classify_quality, _looks_like_season_pack
+from torrentio import TorrentioStream, _looks_like_season_pack
 
 log = logging.getLogger(__name__)
 
 _BYTES_PER_GB = 1024 ** 3
 
+# Maps Zilean quality field to the token that rank_streams() regex filters recognise.
+_QUALITY_TOKEN_MAP = {
+    "WEB-DL": "WEB-DL",
+    "WEB": "WEBRip",
+    "BluRay": "BluRay",
+    "BluRay REMUX": "BluRay Remux",
+    "BRRip": "BRRip",
+    "DVDRip": "DVDRip",
+    "HDTV": "HDTV",
+    "CAM": "CAM",
+    "TS": "TS",
+}
+
 
 def _to_stream(raw: dict, season: int | None) -> TorrentioStream | None:
-    info_hash = raw.get("infoHash")
+    info_hash = raw.get("info_hash") or ""
     if not info_hash:
         return None
-    title = raw.get("title", "") or ""
-    size_bytes = raw.get("size") or 0
-    size_gb = round(size_bytes / _BYTES_PER_GB, 2) if size_bytes else 0.0
-    blob = {"name": title, "title": title}
+
+    raw_title = raw.get("raw_title", "") or ""
+    resolution = (raw.get("resolution") or "unknown").lower()
+    # Normalise to the labels used in QUALITY_PREFERENCE / _QUALITY_PATTERNS.
+    quality = resolution if resolution in ("2160p", "1080p", "720p", "480p") else "unknown"
+
+    zilean_quality = raw.get("quality") or ""
+    # Embed the quality token in name so WEBDL_RE / REMUX_RE / CAM_RE etc. fire correctly.
+    source_token = _QUALITY_TOKEN_MAP.get(zilean_quality, zilean_quality)
+    name = f"{raw_title} {source_token}".strip()
+
+    size_str = raw.get("size") or "0"
+    try:
+        size_gb = round(int(size_str) / _BYTES_PER_GB, 2)
+    except (ValueError, TypeError):
+        size_gb = 0.0
+
     return TorrentioStream(
-        name="Zilean",
-        title=title,
+        name=name,
+        title=raw_title,
         info_hash=info_hash.lower(),
-        quality=_classify_quality(blob),
+        quality=quality,
         seeders=0,  # Zilean doesn't expose seeder counts
         size_gb=size_gb,
-        is_season_pack=_looks_like_season_pack(title, season),
+        is_season_pack=_looks_like_season_pack(raw_title, season),
     )
 
 
 def fetch_streams(
-    query: str,
+    imdb_id: str,
     season: int | None = None,
     episode: int | None = None,
     timeout: int = 10,
 ) -> list[TorrentioStream]:
-    params: dict[str, object] = {"Query": query}
+    params: dict[str, object] = {"ImdbId": imdb_id}
     if season is not None:
         params["Season"] = season
     if episode is not None:
         params["Episode"] = episode
-    url = f"{ZILEAN_URL.rstrip('/')}/torrents/search"
+    url = f"{ZILEAN_URL.rstrip('/')}/dmm/filtered"
     log.info("Querying Zilean: %s params=%s", url, params)
     try:
         resp = requests.get(url, params=params, timeout=timeout)
