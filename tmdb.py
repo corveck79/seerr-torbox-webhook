@@ -21,7 +21,7 @@ def tmdb_to_imdb(tmdb_id: int | str, media_type: str = "movie") -> str | None:
 
     kind = "movie" if media_type == "movie" else "tv"
     url = f"{_BASE}/{kind}/{tmdb_id}/external_ids"
-    headers = {"Authorization": f"Bearer {TMDB_API_KEY}"}
+    headers = {"Authorization": f"Bearer {TMDB_API_KEY}", "Accept": "application/json"}
     try:
         resp = requests.get(url, headers=headers, timeout=10)
         resp.raise_for_status()
