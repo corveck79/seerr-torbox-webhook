@@ -88,11 +88,18 @@ def _to_stream(raw: dict, season: int | None) -> TorrentioStream | None:
     if not info_hash:
         return None
     title = raw.get("title", "") or ""
+    # bingeGroup (e.g. "torrentio|1080p|WEB-DL|hevc") is more reliable than
+    # free-text title for quality/source/codec classification.
+    binge_group = (raw.get("behaviorHints") or {}).get("bingeGroup") or ""
+    binge_tokens = binge_group.replace("|", " ")
+    # Combine all text sources so every regex (quality, WEBDL, REMUX, CAM, HEVC) fires.
+    name = f"{raw.get('name', '') or ''} {binge_tokens}".strip()
+    augmented = {"name": name, "title": title}
     return TorrentioStream(
-        name=raw.get("name", "") or "",
+        name=name,
         title=title,
         info_hash=info_hash.lower(),
-        quality=_classify_quality(raw),
+        quality=_classify_quality(augmented),
         seeders=_parse_seeders(title),
         size_gb=_parse_size_gb(title),
         is_season_pack=_looks_like_season_pack(title, season),
