@@ -8,6 +8,9 @@ from config import (
     ALLOW_4K,
     EXCLUDE_CAM,
     EXCLUDE_REMUX,
+    MAX_SIZE_GB,
+    MIN_SEEDERS,
+    PREFER_HEVC,
     PREFER_WEBDL,
     QUALITY_PREFERENCE,
     TORRENTIO_BASE_URL,
@@ -26,9 +29,9 @@ _QUALITY_PATTERNS = {
 _REMUX_RE = re.compile(r"\b(remux|bluray|blu-ray|bdremux)\b", re.IGNORECASE)
 _CAM_RE = re.compile(r"\b(cam|camrip|hdcam|ts|telesync|hdts|scr|screener|dvdscr|workprint|r5)\b", re.IGNORECASE)
 _WEBDL_RE = re.compile(r"\b(web-?dl|webrip|web)\b", re.IGNORECASE)
+_HEVC_RE = re.compile(r"\b(hevc|x265|h\.?265)\b", re.IGNORECASE)
 _SEEDERS_RE = re.compile(r"👤\s*(\d+)")
 _SIZE_RE = re.compile(r"💾\s*([\d.]+)\s*(GB|MB)", re.IGNORECASE)
-_SEASON_PACK_HINTS = ("season", "complete", "s%02d ", "s%02d.")
 
 
 @dataclass
@@ -75,7 +78,6 @@ def _looks_like_season_pack(title: str, season: int | None) -> bool:
         return True
     if "season" in blob:
         return True
-    # Match "S01" but not "S01E02"
     if re.search(rf"s0?{season}(?!e\d)", blob, re.IGNORECASE):
         return True
     return False
@@ -103,7 +105,6 @@ def _build_url(media_type: str, imdb_id: str, season: int | None, episode: int |
         prefix = f"{prefix}/{TORRENTIO_OPTS.strip('/')}"
     if media_type == "movie":
         return f"{prefix}/stream/movie/{imdb_id}.json"
-    # series
     if season is None or episode is None:
         raise ValueError("season and episode are required for series")
     return f"{prefix}/stream/series/{imdb_id}:{season}:{episode}.json"
@@ -134,16 +135,18 @@ def _quality_rank(stream: TorrentioStream) -> int:
         return len(QUALITY_PREFERENCE) + 1
 
 
-def pick_best(
+def rank_streams(
     streams: list[TorrentioStream],
     prefer_season_pack: bool = False,
-) -> TorrentioStream | None:
+) -> list[TorrentioStream]:
+    """Return streams sorted by preference, applying content/quality filters with fallbacks."""
     if not streams:
-        return None
+        return []
+
     candidates = streams if ALLOW_4K else [s for s in streams if s.quality != "2160p"]
     if not candidates:
-        log.warning("No non-4K candidates available; falling back to full list")
-        candidates = streams
+        log.warning("No non-4K candidates; falling back to full list")
+        candidates = list(streams)
 
     if EXCLUDE_REMUX:
         filtered = [s for s in candidates if not _REMUX_RE.search(f"{s.name} {s.title}")]
@@ -159,18 +162,45 @@ def pick_best(
         else:
             log.warning("Only cam/telesync candidates available; allowing them")
 
-    def sort_key(s: TorrentioStream):
-        is_webdl = bool(_WEBDL_RE.search(f"{s.name} {s.title}"))
+    if MIN_SEEDERS > 0:
+        # seeders==0 means unparseable (no 👤 in title), give benefit of the doubt
+        filtered = [s for s in candidates if s.seeders == 0 or s.seeders >= MIN_SEEDERS]
+        if filtered:
+            candidates = filtered
+        else:
+            log.warning("No candidates meet MIN_SEEDERS=%d; allowing all", MIN_SEEDERS)
+
+    if MAX_SIZE_GB > 0:
+        # size_gb==0.0 means unparseable, don't exclude
+        filtered = [s for s in candidates if s.size_gb == 0.0 or s.size_gb <= MAX_SIZE_GB]
+        if filtered:
+            candidates = filtered
+        else:
+            log.warning("No candidates within MAX_SIZE_GB=%d; allowing all", MAX_SIZE_GB)
+
+    def sort_key(s: TorrentioStream) -> tuple:
+        blob = f"{s.name} {s.title}"
         return (
             0 if prefer_season_pack and s.is_season_pack else 1,
             _quality_rank(s),
-            0 if PREFER_WEBDL and is_webdl else 1,
+            0 if PREFER_WEBDL and _WEBDL_RE.search(blob) else 1,
+            0 if PREFER_HEVC and _HEVC_RE.search(blob) else 1,
             -s.seeders,
             s.size_gb,
         )
 
     candidates.sort(key=sort_key)
-    best = candidates[0]
+    return candidates
+
+
+def pick_best(
+    streams: list[TorrentioStream],
+    prefer_season_pack: bool = False,
+) -> TorrentioStream | None:
+    ranked = rank_streams(streams, prefer_season_pack=prefer_season_pack)
+    if not ranked:
+        return None
+    best = ranked[0]
     log.info(
         "Selected stream: quality=%s seeders=%d size=%.2fGB pack=%s hash=%s",
         best.quality,
