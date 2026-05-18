@@ -56,8 +56,27 @@ def _fetch_season_candidates(req: MediaRequest, season: int, episode: int, prefe
     return _rank(streams, prefer_season_pack=prefer_season_pack)
 
 
+def _try_add_magnet(stream: TorrentioStream, label: str) -> bool:
+    """Try adding a single magnet to TorBox. On 429 waits 15s and retries once."""
+    for attempt in range(2):
+        try:
+            torbox.add_magnet(stream.magnet)
+            torbox.wait_until_ready(stream.info_hash)
+            return True
+        except Exception as exc:
+            resp = getattr(exc, "response", None)
+            if resp is not None and resp.status_code == 429:
+                if attempt == 0:
+                    log.warning("Rate limited (429) adding %s — waiting 15s then retrying", label)
+                    time.sleep(15)
+                    continue
+            log.warning("Failed to add %s (hash=%s): %s", label, stream.info_hash, exc)
+            return False
+    return False
+
+
 def _add_best_from(candidates: list, label: str) -> tuple[bool, Optional[TorrentioStream]]:
-    """Check cache, prefer cached candidates, fall back to best uncached if none cached.
+    """Check cache, try best cached candidate first, fall back to second-best on failure.
     Returns (success, winning_stream).
     """
     cached_hashes = torbox.check_cached([s.info_hash for s in candidates])
@@ -66,20 +85,20 @@ def _add_best_from(candidates: list, label: str) -> tuple[bool, Optional[Torrent
     uncached = [s for s in candidates if s.info_hash not in cached_hashes]
 
     if cached:
-        log.info("%d/%d candidate(s) cached for %s — using cached", len(cached), len(candidates), label)
+        log.info("%d/%d candidate(s) cached for %s — trying best cached", len(cached), len(candidates), label)
+        to_try = cached[:2]
     else:
-        log.info("No cached candidates for %s — will add best uncached", label)
+        log.info("No cached candidates for %s — trying best uncached", label)
+        to_try = uncached[:2]
 
-    for stream in (cached or uncached[:1]):
-        try:
-            torbox.add_magnet(stream.magnet)
-            torbox.wait_until_ready(stream.info_hash)
+    for i, stream in enumerate(to_try):
+        if i > 0:
+            time.sleep(2)
+        if _try_add_magnet(stream, label):
             return True, stream
-        except Exception as exc:
-            log.warning(
-                "Failed to add %s (hash=%s quality=%s cached=%s): %s — trying next",
-                label, stream.info_hash, stream.quality, stream.info_hash in cached_hashes, exc,
-            )
+        log.warning("Candidate %d/%d failed for %s — %s", i + 1, len(to_try), label,
+                    "trying next" if i + 1 < len(to_try) else "giving up")
+
     log.error("All candidate(s) failed for %s", label)
     return False, None
 
