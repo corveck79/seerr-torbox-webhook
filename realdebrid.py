@@ -124,21 +124,22 @@ def _is_video(name: str) -> bool:
     return n.endswith(_VIDEO_EXTS)
 
 
+def _selected_with_links(info: dict) -> list[tuple[dict, str]]:
+    """Pair each selected file with its corresponding RD hoster link."""
+    files = info.get("files") or []
+    links = info.get("links") or []
+    selected = [f for f in files if f.get("selected")]
+    return [(f, links[idx]) for idx, f in enumerate(selected) if idx < len(links)]
+
+
 def get_main_video_url(rd_id: str) -> str | None:
     """For a ready RD torrent, pick the largest video file and return an
     unrestricted CDN URL for it. Returns None if RD couldn't deliver."""
     info = get_info(rd_id)
     if not info:
         return None
-    files = info.get("files") or []
-    links = info.get("links") or []
-    if not files or not links:
-        return None
-    # RD pairs selected files with the links array in order. Build (size, link)
-    # tuples for selected video files.
-    selected = [(f, links[idx]) for idx, f in enumerate(
-        [f for f in files if f.get("selected")]) if idx < len(links)]
-    video_files = [(f, link) for f, link in selected if _is_video(f.get("path") or f.get("name") or "")]
+    pairs = _selected_with_links(info)
+    video_files = [(f, link) for f, link in pairs if _is_video(f.get("path") or f.get("name") or "")]
     if not video_files:
         return None
     # Skip obvious trailers (< 200 MB) when we have larger files
@@ -146,3 +147,30 @@ def get_main_video_url(rd_id: str) -> str | None:
     pool = big or video_files
     main = max(pool, key=lambda fl: fl[0].get("bytes") or 0)
     return unrestrict_link(main[1])
+
+
+def get_video_files_with_urls(rd_id: str) -> list[tuple[dict, str]]:
+    """For a ready RD torrent (typically a season pack), return (file_dict,
+    unrestricted_url) for every video file. Used to fan out per-episode
+    .strm files."""
+    info = get_info(rd_id)
+    if not info:
+        return []
+    pairs = _selected_with_links(info)
+    out: list[tuple[dict, str]] = []
+    for f, hoster_link in pairs:
+        path = f.get("path") or f.get("name") or ""
+        if not _is_video(path):
+            continue
+        # Skip tiny files (likely featurettes/extras)
+        if (f.get("bytes") or 0) < 50 * 1024 * 1024:
+            continue
+        direct = unrestrict_link(hoster_link)
+        if direct:
+            out.append((f, direct))
+    return out
+
+
+def torrent_name(rd_id: str) -> str:
+    info = get_info(rd_id) or {}
+    return info.get("filename") or info.get("original_filename") or ""

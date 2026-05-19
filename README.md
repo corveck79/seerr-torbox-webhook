@@ -141,7 +141,13 @@ sequenceDiagram
 - A [TorBox](https://torbox.app) account (Essential plan or higher recommended)
 - [Jellyseerr](https://jellyseerr.dev) / [Overseerr](https://overseerr.dev) running
 - [Jellyfin](https://jellyfin.org) running
-- *(Optional)* a [Zilean](https://github.com/iPromKnight/zilean) instance for local-first scraping
+
+That's it — out of the box Mycelium uses [Torrentio](https://torrentio.strem.fun) for scraping, which is a public service with no self-hosting required.
+
+**Optional add-ons** (you don't need any of these to get started):
+- [Zilean](https://github.com/iPromKnight/zilean) — self-hosted local hash index, tried before Torrentio for faster + private search
+- [RealDebrid](https://real-debrid.com) — alternative debrid as fallback for cases where TorBox doesn't have a release cached
+- [OpenSubtitles](https://www.opensubtitles.com/en/consumers) API key — auto subtitle download
 
 ### Install
 
@@ -289,7 +295,7 @@ If the DB itself is corrupted: Overview → **🚑 Recovery wizard** rebuilds th
 
 ## 🗺 Roadmap
 
-- [x] ~~Multi-debrid productionised (RealDebrid as actual fallback, not just informational)~~ — movies done; series still TorBox-only
+- [x] ~~Multi-debrid productionised (RealDebrid as actual fallback)~~ — movies + season-pack series done
 - [ ] Plex compatibility via in-container SMB/WebDAV proxy
 - [ ] Prometheus metrics export
 - [ ] Web-based one-click installer

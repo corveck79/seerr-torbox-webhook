@@ -226,6 +226,30 @@ def create_strm_for_torrent(torrent_id: int, title: str, media_type: str) -> int
     return process_torrent(item)
 
 
+def create_series_strms_from_files(torrent_name: str, files_with_urls: list) -> int:
+    """For a season-pack torrent on any debrid provider, write per-episode .strm
+    files. files_with_urls is a list of (file_dict_with_path_and_size, direct_url).
+    Returns count of new files written."""
+    written = 0
+    for f, url in files_with_urls:
+        file_name = (f.get("path") or f.get("name") or "").lstrip("/").split("/")[-1]
+        info = _parse_info(torrent_name, file_name)
+        if not info or info["type"] != "episode":
+            log.debug("Skip non-episode file: %s", file_name)
+            continue
+        path = _strm_path(info)
+        if path.exists():
+            continue
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(url, encoding="utf-8")
+            log.info("Created series .strm: %s", path)
+            written += 1
+        except Exception as exc:
+            log.warning("Could not write series .strm %s: %s", path, exc)
+    return written
+
+
 def create_movie_strm_from_url(title: str, url: str) -> Path | None:
     """Write a movie .strm pointing at a direct CDN URL (e.g. RealDebrid).
     Parses year from the title and builds the standard movies/Title (Year)/Title (Year).strm

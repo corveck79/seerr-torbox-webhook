@@ -25,6 +25,8 @@ _cache: dict[str, tuple[bool, float]] = {}
 def _probe(name: str) -> bool:
     try:
         if name == "zilean":
+            if not ZILEAN_URL:
+                return False
             r = requests.get(f"{ZILEAN_URL.rstrip('/')}/healthz", timeout=3)
             return r.status_code < 500
         if name == "torrentio":
@@ -37,7 +39,7 @@ def _probe(name: str) -> bool:
 
 
 def is_up(name: str) -> bool:
-    if name == "zilean" and not ZILEAN_ENABLED:
+    if name == "zilean" and (not ZILEAN_ENABLED or not ZILEAN_URL):
         return False
     now = time.monotonic()
     with _lock:

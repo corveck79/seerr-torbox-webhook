@@ -131,8 +131,13 @@ def _process_movie(req: MediaRequest) -> tuple[bool, Optional[TorrentioStream]]:
     return False, None
 
 
-def _try_realdebrid_fallback(title: str, candidates: list) -> Optional[TorrentioStream]:
-    """Add the best RD-cached candidate via RealDebrid and write a direct .strm."""
+def _try_realdebrid_fallback(title: str, candidates: list,
+                              media_type: str = "movie") -> Optional[TorrentioStream]:
+    """Add the best RD-cached candidate via RealDebrid and write .strm file(s).
+
+    Movies: largest non-trailer file → single .strm.
+    Series: every video file in the pack → per-episode .strm files.
+    """
     try:
         import realdebrid
         from config import MULTI_DEBRID_ENABLED
@@ -146,7 +151,7 @@ def _try_realdebrid_fallback(title: str, candidates: list) -> Optional[Torrentio
     if not rd_candidates:
         log.info("RD fallback: no candidates cached on RealDebrid for %s", title)
         return None
-    log.info("RD fallback: %d cached on RD — trying best", len(rd_candidates))
+    log.info("RD fallback (%s): %d cached on RD — trying best", media_type, len(rd_candidates))
     for cand in rd_candidates[:2]:
         try:
             added = realdebrid.add_magnet(cand.magnet)
@@ -154,10 +159,22 @@ def _try_realdebrid_fallback(title: str, candidates: list) -> Optional[Torrentio
             if not rd_id:
                 continue
             realdebrid.wait_until_ready(rd_id)
-            url = realdebrid.get_main_video_url(rd_id)
-            if not url:
-                continue
-            strm_generator.create_movie_strm_from_url(title, url)
+            if media_type == "movie":
+                url = realdebrid.get_main_video_url(rd_id)
+                if not url:
+                    continue
+                strm_generator.create_movie_strm_from_url(title, url)
+            else:
+                pairs = realdebrid.get_video_files_with_urls(rd_id)
+                if not pairs:
+                    log.warning("RD fallback: no video files for %s", title)
+                    continue
+                tname = realdebrid.torrent_name(rd_id) or cand.name
+                written = strm_generator.create_series_strms_from_files(tname, pairs)
+                if written == 0:
+                    log.warning("RD fallback: 0 episodes parsed from %s", tname)
+                    continue
+                log.info("RD fallback: %d episode .strm(s) written for %s", written, title)
             log.info("RD fallback: served %s via RealDebrid (hash=%s)", title, cand.info_hash)
             return cand
         except Exception as exc:
@@ -175,6 +192,11 @@ def _process_season(req: MediaRequest, season: int) -> tuple[bool, Optional[Torr
         ok, winner = _add_best_from(packs, f"{req.title} S{season:02d} pack")
         if ok:
             return True, winner
+        rd_winner = _try_realdebrid_fallback(
+            f"{req.title} S{season:02d}", packs, media_type="series",
+        )
+        if rd_winner:
+            return True, rd_winner
         log.info("Season pack(s) failed; falling back to per-episode")
 
     log.info("Going per-episode for %s S%02d", req.title, season)

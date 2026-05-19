@@ -22,8 +22,8 @@ def _env_int(name: str, default: int) -> int:
 TORBOX_API_KEY = _env("TORBOX_API_KEY", required=True)
 TORBOX_BASE_URL = _env("TORBOX_BASE_URL", "https://api.torbox.app/v1/api")
 
-ZILEAN_URL = _env("ZILEAN_URL", "http://10.0.0.10:8181")
-ZILEAN_ENABLED = _env("ZILEAN_ENABLED", "true").lower() in ("1", "true", "yes")
+ZILEAN_URL = _env("ZILEAN_URL", "")
+ZILEAN_ENABLED = _env("ZILEAN_ENABLED", "false").lower() in ("1", "true", "yes")
 
 TORRENTIO_BASE_URL = _env("TORRENTIO_BASE_URL", "https://torrentio.strem.fun")
 TORRENTIO_OPTS = _env("TORRENTIO_OPTS", "")
