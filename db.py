@@ -1,8 +1,49 @@
 import logging
 import sqlite3
+import threading
+from contextlib import contextmanager
+
 from config import DB_PATH
 
 log = logging.getLogger(__name__)
+
+# Thread-local connection cache: one open SQLite handle per thread, reused for
+# the lifetime of the thread. Eliminates the open/close churn on every query
+# under heavy load (dashboard polling + scheduler + webhooks running together).
+_tls = threading.local()
+
+
+def _raw_connect() -> sqlite3.Connection:
+    conn = sqlite3.connect(DB_PATH, isolation_level=None, check_same_thread=False)
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA synchronous=NORMAL")
+    conn.execute("PRAGMA foreign_keys=ON")
+    conn.execute("PRAGMA busy_timeout=5000")
+    return conn
+
+
+def _thread_conn() -> sqlite3.Connection:
+    conn = getattr(_tls, "conn", None)
+    if conn is None:
+        conn = _raw_connect()
+        _tls.conn = conn
+    return conn
+
+
+@contextmanager
+def _connect():
+    """Yield a per-thread sqlite3 connection. We deliberately do NOT close it
+    on exit; the connection lives for the thread's lifetime."""
+    conn = _thread_conn()
+    try:
+        yield conn
+    except Exception:
+        try:
+            conn.execute("ROLLBACK")
+        except Exception:
+            pass
+        raise
 
 _DDL = """
 CREATE TABLE IF NOT EXISTS requests (
@@ -160,26 +201,28 @@ CREATE TABLE IF NOT EXISTS repair_items (
     reason          TEXT,
     created_at      TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%S', 'now'))
 );
+
+CREATE INDEX IF NOT EXISTS idx_requests_imdb              ON requests(imdb_id);
+CREATE INDEX IF NOT EXISTS idx_requests_status_created    ON requests(status, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_monitored_series_status    ON monitored_series(status);
+CREATE INDEX IF NOT EXISTS idx_wanted_status_attempts     ON wanted_episodes(status, attempt_count);
+CREATE INDEX IF NOT EXISTS idx_wanted_imdb                ON wanted_episodes(imdb_id);
+CREATE INDEX IF NOT EXISTS idx_media_items_status         ON media_items(status);
+CREATE INDEX IF NOT EXISTS idx_failed_hashes_failcount    ON failed_hashes(fail_count);
+CREATE INDEX IF NOT EXISTS idx_virtual_items_torbox       ON virtual_items(torbox_id);
+CREATE INDEX IF NOT EXISTS idx_virtual_items_lastplayed   ON virtual_items(last_played);
+CREATE INDEX IF NOT EXISTS idx_metric_events_metric_time  ON metric_events(metric, created_at);
+CREATE INDEX IF NOT EXISTS idx_metric_events_created      ON metric_events(created_at);
+CREATE INDEX IF NOT EXISTS idx_activity_log_created       ON activity_log(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_webhook_events_received    ON webhook_events(received_at);
+CREATE INDEX IF NOT EXISTS idx_retry_queue_next           ON retry_queue(next_retry_at);
+CREATE INDEX IF NOT EXISTS idx_repair_items_run           ON repair_items(cleanup_run_id, created_at DESC);
 """
 
 
-def _connect() -> sqlite3.Connection:
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    return conn
-
-
 def init() -> None:
+    # PRAGMAs are applied in _raw_connect() on every new thread-local connection.
     with _connect() as conn:
-        # WAL gives concurrent reads while a writer runs — much friendlier under
-        # the background scheduler + webhook traffic mix.
-        try:
-            conn.execute("PRAGMA journal_mode=WAL")
-            conn.execute("PRAGMA synchronous=NORMAL")
-            conn.execute("PRAGMA foreign_keys=ON")
-            conn.execute("PRAGMA busy_timeout=5000")
-        except Exception as exc:
-            log.warning("PRAGMA setup failed: %s", exc)
         for stmt in _DDL.split(";"):
             stmt = stmt.strip()
             if stmt:

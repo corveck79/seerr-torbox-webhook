@@ -141,7 +141,12 @@ def ui_set_password():
 
 
 def _start_scheduler() -> BackgroundScheduler:
-    scheduler = BackgroundScheduler(daemon=True)
+    # job_defaults: every interval job gets +/-60s jitter to avoid stampede when
+    # multiple long-running jobs hit the same minute mark.
+    scheduler = BackgroundScheduler(
+        daemon=True,
+        job_defaults={"jitter": 60, "coalesce": True, "max_instances": 1},
+    )
 
     if MERGE_VERSIONS_INTERVAL_HOURS > 0:
         scheduler.add_job(
@@ -254,8 +259,11 @@ def _start_scheduler() -> BackgroundScheduler:
                        id="deadman", next_run_time=None, max_instances=1)
     scheduler.add_job(watchdog.disk_check, trigger="interval", hours=1,
                        id="disk_check", next_run_time=None, max_instances=1)
-    scheduler.add_job(lambda: db.prune_old(90), trigger="interval", hours=24,
+    # Aggressive pruning so volatile tables don't grow unbounded between scrapes.
+    scheduler.add_job(lambda: db.prune_old(14), trigger="interval", hours=6,
                        id="prune_old", next_run_time=None, max_instances=1)
+    scheduler.add_job(lambda: db.prune_webhook_events(24), trigger="interval", hours=6,
+                       id="prune_webhooks", next_run_time=None, max_instances=1)
     scheduler.add_job(db.vacuum, trigger="interval", hours=24 * 7,
                        id="vacuum", next_run_time=None, max_instances=1)
     log.info("Scheduled watchdogs: deadman/2h, disk/1h, prune/24h, vacuum/weekly")
@@ -279,9 +287,22 @@ scheduler = _start_scheduler()
 if CATCHUP_ENABLED:
     catchup.schedule()
 
-# Kick off initial movie sync and strm scan shortly after startup
-threading.Thread(target=monitor.sync_movies, name="movie-sync-init", daemon=True).start()
-threading.Thread(target=strm_generator.run_and_refresh, name="strm-init", daemon=True).start()
+# Kick off initial movie sync + strm scan ~10s after startup so /health
+# answers fast on cold start and the scheduler isn't elbow-to-elbow with
+# the wizard's first request.
+def _delayed(seconds: float, target, name: str) -> None:
+    def _run():
+        import time as _t
+        _t.sleep(seconds)
+        try:
+            target()
+        except Exception:
+            log.exception("startup task %s failed", name)
+    threading.Thread(target=_run, name=name, daemon=True).start()
+
+
+_delayed(15.0, monitor.sync_movies, "movie-sync-init")
+_delayed(30.0, strm_generator.run_and_refresh, "strm-init")
 
 
 # ── Auth ──────────────────────────────────────────────────────────────────────

@@ -26,15 +26,39 @@ def add_magnet(magnet: str, timeout: int = 30) -> dict:
     if not payload.get("success", False):
         raise RuntimeError(f"Torbox add failed: {payload}")
     log.info("Torbox createtorrent response: %s", payload.get("detail") or payload.get("data"))
+    invalidate_mylist_cache()
     return payload.get("data", {}) or {}
 
 
-def list_torrents(timeout: int = 30) -> list[dict]:
+_MYLIST_TTL_SECONDS = 45
+_mylist_cache: dict = {"items": None, "ts": 0.0}
+_mylist_lock = __import__("threading").Lock()
+
+
+def list_torrents(timeout: int = 30, force_refresh: bool = False) -> list[dict]:
+    """Return TorBox mylist, cached for ~45s. Use force_refresh=True after a
+    successful add or delete to avoid serving a stale view."""
+    import time as _t
+    if not force_refresh:
+        cached = _mylist_cache["items"]
+        if cached is not None and (_t.monotonic() - _mylist_cache["ts"]) < _MYLIST_TTL_SECONDS:
+            return cached
     url = f"{TORBOX_BASE_URL.rstrip('/')}/torrents/mylist"
     resp = requests.get(url, headers=_headers(), timeout=timeout)
     resp.raise_for_status()
     payload = resp.json() or {}
-    return payload.get("data", []) or []
+    items = payload.get("data", []) or []
+    with _mylist_lock:
+        _mylist_cache["items"] = items
+        _mylist_cache["ts"] = _t.monotonic()
+    return items
+
+
+def invalidate_mylist_cache() -> None:
+    """Drop the mylist cache so the next list_torrents() hits TorBox fresh."""
+    with _mylist_lock:
+        _mylist_cache["items"] = None
+        _mylist_cache["ts"] = 0.0
 
 
 def _matches_hash(item: dict, info_hash: str) -> bool:
@@ -121,6 +145,7 @@ def delete_torrent(torrent_id: int, timeout: int = 15) -> bool:
         )
         resp.raise_for_status()
         log.info("Deleted TorBox torrent %s", torrent_id)
+        invalidate_mylist_cache()
         return True
     except Exception as exc:
         log.warning("Delete torrent %s failed: %s", torrent_id, exc)
