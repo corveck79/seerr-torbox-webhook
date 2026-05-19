@@ -60,7 +60,7 @@ def _strip_junk(s: str) -> str:
 
 
 def _safe(s: str) -> str:
-    return _SAFE_RE.sub('', s).strip()
+    return _SAFE_RE.sub('', s).strip().rstrip('([{ -')
 
 
 def _parse_info(torrent_name: str, file_name: str) -> dict | None:
@@ -122,6 +122,13 @@ def _write_strm(path: Path, url: str) -> bool:
     """Write .strm file only if it doesn't exist. Returns True if a new file was written."""
     if path.exists():
         return False
+    # Case-insensitive check: skip if a folder for the same movie already exists
+    parent = path.parent.parent  # movies/ or series/
+    folder_lower = path.parent.name.lower()
+    if parent.is_dir():
+        for existing in parent.iterdir():
+            if existing.is_dir() and existing.name.lower() == folder_lower and existing != path.parent:
+                return False
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(url, encoding='utf-8')
