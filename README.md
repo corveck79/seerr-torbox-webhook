@@ -17,10 +17,12 @@
 </p>
 
 <p>
+  <a href="#-why-mycelium">Why</a> ·
   <a href="#-quick-start">Quick start</a> ·
   <a href="#-features">Features</a> ·
   <a href="#-architecture">Architecture</a> ·
   <a href="#-configuration">Configuration</a> ·
+  <a href="#-plex-compatibility-opt-in">Plex</a> ·
   <a href="#-faq">FAQ</a>
 </p>
 
@@ -40,7 +42,25 @@ Seerr webhook  →  search Zilean + Torrentio  →  cache-check TorBox
             (optional) Catbox lazy mode    →  TorBox stays small, library stays huge
 ```
 
-Built for the **Jellyfin + TorBox + Synology NAS** stack. No FUSE, no rclone, no Plex required.
+Built for the **Jellyfin + TorBox + Synology NAS** stack. No FUSE, no rclone, no Plex required (but supported).
+
+---
+
+## 🌱 Why Mycelium?
+
+I run a Synology DS920+ with Jellyfin and a small TorBox subscription. The popular `.strm`-generator for that combination is TorBox Media Center (TMC), and TMC kept tripping over its own feet: wiping my entire `.strm` library on restart, crashing mid-rebuild, leaving Jellyfin staring at a half-built collection. Every few days I was SSHing into the NAS to clean up.
+
+[elfhosted's CatBox](https://docs.elfhosted.com/app/catbox/) showed there's a smarter pattern: torrents that stay *virtual* in your library until you actually press play, then materialise on demand. The whole idea is gorgeous, but CatBox is a managed hosting service. I wanted that same pattern running on my own NAS, alongside my own containers, without rclone, without giving Docker `SYS_ADMIN`, and without renting somebody else's compute.
+
+So Mycelium is the orchestrator I wished existed:
+
+- **Self-hosted end-to-end.** One container, your data, your hardware.
+- **No FUSE in Docker.** `.strm` files for Jellyfin; optional WebDAV at host level for Plex.
+- **Catbox-style lazy mode**, but optional and built in, not bolted on.
+- **A real dashboard.** I shouldn't have to `tail -f` to know what's going on.
+- **Resilient enough** that my partner can ask "where's that show?" and I don't have to think about it.
+
+If your stack looks like mine, hopefully this saves you a few weekends.
 
 ---
 
@@ -109,6 +129,7 @@ sequenceDiagram
 <details>
 <summary><b>🖥 UX</b></summary>
 
+- **Web-based setup wizard** on first launch (no `.env` editing required).
 - Polished dashboard at `/ui`: 11 tabs, sortable tables, TMDB posters, dark/light theme.
 - **Manual search & pick**: see every Zilean/Torrentio candidate, pick exactly which to add.
 - **Runtime settings**: toggle Catbox mode, quality filters, etc. without restart.
@@ -122,13 +143,15 @@ sequenceDiagram
 <details>
 <summary><b>🔌 Integrations</b></summary>
 
-| Endpoint / module | Purpose |
+| Integration | What it does |
 |---|---|
-| `POST /webhook` | Jellyseerr / Overseerr notifications |
-| `POST /torbox-webhook` | TorBox push (skip polling) |
+| `POST /webhook` | Jellyseerr / Overseerr request notifications |
+| `POST /torbox-webhook` | TorBox push notifications (skip polling) |
+| `GET /dav/...` | Optional read-only WebDAV server for Plex / Emby |
 | OpenSubtitles | Auto `.srt` per language (optional) |
 | Continue Watching | Prioritize next episodes via Jellyfin Resume API |
-| RealDebrid | Multi-debrid fallback (movies + season packs) |
+| RealDebrid | Multi-debrid fallback for movies and season packs |
+| Prometheus / Grafana | `/metrics` endpoint, ready-made dashboard at `assets/grafana-dashboard.json` |
 
 </details>
 
@@ -157,7 +180,7 @@ cd mycelium
 docker compose up -d --build
 ```
 
-That's it. Open **`http://<your-nas>:8088/ui`** and the setup wizard walks you through:
+Open **`http://<your-nas>:8088/ui`** and the setup wizard walks you through:
 
 1. TorBox API key (the one required thing).
 2. Jellyfin URL and API key.
@@ -210,7 +233,7 @@ The full reference lives in [`.env.example`](.env.example). Key knobs:
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `TORBOX_API_KEY` | *(required)* | From [torbox.app](https://torbox.app) → Settings → API |
+| `TORBOX_API_KEY` | *(set via wizard)* | From [torbox.app](https://torbox.app) → Settings → API |
 | `CATBOX_MODE` | `false` | Lazy materialization (recommended once stable) |
 | `CATBOX_HOST` | `http://10.0.0.10:8088` | Externally reachable URL for proxy strm URLs |
 | `CATBOX_IDLE_MINUTES` | `60` | Idle time before a torrent is released from TorBox |
@@ -233,7 +256,7 @@ The full reference lives in [`.env.example`](.env.example). Key knobs:
 
 ---
 
-## 🩺 Healthcheck
+## 📡 Observability
 
 The container exposes three endpoints:
 
@@ -245,7 +268,26 @@ The container exposes three endpoints:
 
 In **Synology Container Manager** the healthcheck is picked up automatically; a red badge means the container will be auto-restarted within about 3 minutes.
 
-### WebDAV / Plex compatibility (opt-in)
+### Grafana dashboard
+
+A ready-made dashboard lives at [`assets/grafana-dashboard.json`](assets/grafana-dashboard.json). It includes:
+
+- 24-hour KPIs (request count, success rate, p95 latency, last-success age, TorBox usage)
+- Request rate stack (success vs failed)
+- Latency p50 / p95 / p99 lines
+- Source win-rate donut (Zilean vs Torrentio)
+- Quality distribution bargauge
+- Service-health stat tiles
+- Library size trend (movies / series)
+- Catbox virtual vs materialised gauge
+- Retry queue, blacklist and wanted-episodes ops row
+- Catbox stream-resolution rate (ok / rematerialized / failed)
+
+To import: **Dashboards → New → Import → Upload JSON file**, then pick your Prometheus datasource.
+
+---
+
+## 🎬 Plex compatibility (opt-in)
 
 Mycelium can serve the library as virtual `.mkv` files via WebDAV. Mount the share at the DSM host and any media server (Plex, Emby, Kodi, Infuse) can scan it like a normal filesystem. The container itself does **not** require FUSE; the mount is done at host level using DSM's built-in `davfs2`.
 
@@ -289,26 +331,25 @@ Plex sees `/data/library/movies/Inception (2010)/Inception (2010).mkv` as a regu
 
 **Supported methods:** `OPTIONS`, `PROPFIND`, `HEAD`, `GET` (read-only).
 
-### Grafana dashboard
-
-A ready-made dashboard lives at [`assets/grafana-dashboard.json`](assets/grafana-dashboard.json). It includes:
-
-- 24-hour KPIs (request count, success rate, p95 latency, last-success age, TorBox usage)
-- Request rate stack (success vs failed)
-- Latency p50 / p95 / p99 lines
-- Source win-rate donut (Zilean vs Torrentio)
-- Quality distribution bargauge
-- Service-health stat tiles
-- Library size trend (movies / series)
-- Catbox virtual vs materialised gauge
-- Retry queue, blacklist and wanted-episodes ops row
-- Catbox stream-resolution rate (ok / rematerialized / failed)
-
-To import: **Dashboards → New → Import → Upload JSON file**, then pick your Prometheus datasource.
-
 ---
 
 ## ❓ FAQ
+
+<details>
+<summary><b>How is this different from TMC?</b></summary>
+
+TMC (TorBox Media Center) is the obvious off-the-shelf option, but in my experience it deletes the entire `.strm` library on restart, crashes during metadata builds, and lacks any UI for figuring out what went wrong. Mycelium rebuilds the same idea with WAL-mode SQLite, per-IMDB mutexes, idempotency on webhooks, daily backups, a recovery wizard, and a dashboard so you can actually see what's happening.
+
+If TMC works for you, great. If it doesn't, this exists.
+</details>
+
+<details>
+<summary><b>How is this different from elfhosted's CatBox?</b></summary>
+
+CatBox is the gold standard for the lazy-materialise pattern, but it's a managed hosting service: you pay elfhosted, they run it for you. Mycelium runs on your own NAS or VPS, with your own TorBox account, no third-party infrastructure. The Catbox-style mode in Mycelium is directly inspired by their work and credited as such.
+
+Mycelium also targets Seerr webhooks rather than the Radarr/Sonarr ecosystem CatBox supports.
+</details>
 
 <details>
 <summary><b>Why not just use rclone + Plex?</b></summary>
@@ -361,9 +402,11 @@ If the DB itself is corrupted: Overview → **🚑 Recovery wizard** rebuilds th
 - [x] ~~Multi-debrid productionised (RealDebrid as actual fallback)~~. Movies and season-pack series done.
 - [x] ~~Plex compatibility via WebDAV~~. Mount via davfs2 on DSM host.
 - [x] ~~Prometheus metrics export~~. Exposed at `/metrics`.
-- [ ] Per-episode RealDebrid fallback (not just season packs).
 - [x] ~~Web-based one-click installer~~. Visit `/ui` on first run.
 - [x] ~~Light official theme~~. Toggle from the topbar icon.
+- [ ] Per-episode RealDebrid fallback (not just season packs).
+- [ ] Optional auth for the dashboard.
+- [ ] OIDC / reverse-proxy header support.
 
 ---
 

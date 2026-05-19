@@ -178,7 +178,11 @@ def _coerce(key: str, raw: str | None):
 
 
 def get(key: str, default=None):
-    raw = db.get_setting(key)
+    try:
+        raw = db.get_setting(key)
+    except Exception as exc:
+        log.debug("settings.get: DB read failed for %s (%s); falling back to .env", key, exc)
+        raw = None
     if raw is not None:
         coerced = _coerce(key, raw)
         if coerced is not None:

@@ -132,9 +132,9 @@ def _resolve_upstream(strm_path: Path) -> str | None:
             return None
         upstream = resolved
 
-    expires = datetime.now(timezone.utc).replace(microsecond=0)
+    expires = datetime.fromtimestamp(now.timestamp() + ttl, tz=timezone.utc)
     with _cache_lock:
-        _url_cache[strm_path] = (upstream, expires.fromtimestamp(now.timestamp() + ttl, tz=timezone.utc))
+        _url_cache[strm_path] = (upstream, expires)
     return upstream
 
 
