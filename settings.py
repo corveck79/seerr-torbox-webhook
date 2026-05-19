@@ -57,6 +57,13 @@ _INT_KEYS = {
     "BLACKLIST_FAIL_THRESHOLD",
     "TRENDING_PRECACHE_COUNT",
     "TRENDING_CHECK_INTERVAL_HOURS",
+    "TRENDING_TV_COUNT",
+    "POPULAR_MOVIE_COUNT",
+    "POPULAR_TV_COUNT",
+    "NETFLIX_NL_TOP_COUNT",
+    "PRIME_NL_TOP_COUNT",
+    "DISNEY_NL_TOP_COUNT",
+    "AUTO_ADD_MIN_VOTES",
     "AUTO_UPGRADE_INTERVAL_HOURS",
     "SEASON_PACK_CHECK_INTERVAL_HOURS",
     "RETRY_QUEUE_INTERVAL_MINUTES",
@@ -107,6 +114,10 @@ HOT_RELOAD = {
     "TRUSTED_PROXY_AUTH",
     "TRUSTED_PROXY_USER_HEADER",
     "TRUSTED_PROXY_NETWORKS",
+    "TRENDING_TV_COUNT", "POPULAR_MOVIE_COUNT", "POPULAR_TV_COUNT",
+    "NETFLIX_NL_TOP_COUNT", "PRIME_NL_TOP_COUNT", "DISNEY_NL_TOP_COUNT",
+    "AUTO_ADD_MIN_RATING", "AUTO_ADD_MIN_VOTES", "AUTO_ADD_REGION",
+    "RADARR_URL", "RADARR_API_KEY", "SONARR_URL", "SONARR_API_KEY",
 }
 
 # Logical groups for the Settings UI tab.
@@ -150,6 +161,21 @@ SETTING_GROUPS = [
             "TRENDING_PRECACHE_COUNT", "TRENDING_CHECK_INTERVAL_HOURS",
             "BLACKLIST_FAIL_THRESHOLD",
         ],
+    },
+    {
+        "id": "auto_add",
+        "title": "Auto-add categories",
+        "keys": [
+            "TRENDING_PRECACHE_COUNT", "TRENDING_TV_COUNT",
+            "POPULAR_MOVIE_COUNT", "POPULAR_TV_COUNT",
+            "NETFLIX_NL_TOP_COUNT", "PRIME_NL_TOP_COUNT", "DISNEY_NL_TOP_COUNT",
+            "AUTO_ADD_MIN_RATING", "AUTO_ADD_MIN_VOTES", "AUTO_ADD_REGION",
+        ],
+    },
+    {
+        "id": "arr_import",
+        "title": "Radarr / Sonarr import",
+        "keys": ["RADARR_URL", "RADARR_API_KEY", "SONARR_URL", "SONARR_API_KEY"],
     },
     {
         "id": "security",

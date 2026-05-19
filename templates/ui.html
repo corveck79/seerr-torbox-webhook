@@ -202,6 +202,100 @@
     .storage-bar { display: flex; align-items: center; gap: 8px; padding: 6px 0; font-size: 12px; }
     .storage-name { flex: 1; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .storage-count { color: var(--muted); font-family: monospace; min-width: 50px; text-align: right; }
+
+    /* ── Discover ────────────────────────────────────────────────────────── */
+    .discover-hero { margin-bottom: 20px; }
+    .provider-strip { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 8px; }
+    .provider-chip {
+      flex: 0 0 auto; display: flex; align-items: center; gap: 6px;
+      padding: 6px 12px; background: var(--card); border: 1px solid var(--border);
+      border-radius: 999px; cursor: pointer; transition: all 0.15s;
+      font-size: 12px; color: var(--text);
+    }
+    .provider-chip:hover, .provider-chip.active {
+      background: var(--accent); color: white; border-color: var(--accent);
+    }
+    .provider-chip img { width: 18px; height: 18px; border-radius: 4px; }
+    .discover-section { margin-bottom: 28px; }
+    .poster-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+      gap: 14px;
+    }
+    .poster-card {
+      position: relative; overflow: hidden; border-radius: 8px;
+      background: var(--card); border: 1px solid var(--border);
+      cursor: pointer; transition: transform 0.15s, box-shadow 0.15s;
+      aspect-ratio: 2/3;
+    }
+    .poster-card:hover { transform: translateY(-3px); box-shadow: 0 8px 24px rgba(0,0,0,0.3); }
+    .poster-card img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .poster-card .poster-placeholder {
+      width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;
+      color: var(--muted); font-size: 11px; padding: 8px; text-align: center;
+    }
+    .poster-card .poster-overlay {
+      position: absolute; bottom: 0; left: 0; right: 0;
+      background: linear-gradient(to top, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.6) 60%, transparent 100%);
+      padding: 22px 10px 8px; color: white;
+    }
+    .poster-card .poster-title { font-size: 12px; font-weight: 600; line-height: 1.2; margin-bottom: 2px;
+                                  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+                                  overflow: hidden; }
+    .poster-card .poster-meta { font-size: 10px; color: rgba(255,255,255,0.7); display: flex;
+                                 gap: 6px; align-items: center; }
+    .poster-card .poster-rating { background: rgba(255,193,7,0.9); color: black; padding: 1px 5px;
+                                   border-radius: 3px; font-weight: 600; }
+    .poster-card .poster-badge {
+      position: absolute; top: 8px; right: 8px; padding: 2px 6px; border-radius: 4px;
+      background: rgba(0,0,0,0.7); color: white; font-size: 10px; font-weight: 600;
+      text-transform: uppercase;
+    }
+    .poster-card .poster-badge.tv { background: rgba(99,102,241,0.9); }
+
+    .discover-modal {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 999;
+      display: flex; align-items: center; justify-content: center; padding: 20px;
+      overflow-y: auto;
+    }
+    .discover-modal-body {
+      position: relative; max-width: 900px; width: 100%; max-height: 90vh; overflow-y: auto;
+      background: var(--card); border-radius: 12px; padding: 24px;
+    }
+    .discover-modal-close {
+      position: absolute; top: 12px; right: 12px; background: none; border: none;
+      color: var(--text); font-size: 32px; cursor: pointer; line-height: 1;
+    }
+    .modal-hero {
+      display: flex; gap: 20px; margin-bottom: 16px;
+    }
+    .modal-poster { width: 200px; flex: 0 0 200px; border-radius: 8px; overflow: hidden;
+                     aspect-ratio: 2/3; background: var(--bg); }
+    .modal-poster img { width: 100%; height: 100%; object-fit: cover; }
+    .modal-info { flex: 1; }
+    .modal-info h2 { margin: 0 0 6px; font-size: 22px; }
+    .modal-info .tagline { color: var(--muted); font-style: italic; margin-bottom: 10px; }
+    .modal-info .meta-line { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 10px;
+                              font-size: 13px; color: var(--muted); }
+    .modal-info .meta-line .badge {
+      background: var(--bg); padding: 2px 8px; border-radius: 4px;
+    }
+    .modal-info .overview { line-height: 1.5; font-size: 14px; margin: 12px 0; }
+    .modal-actions { display: flex; gap: 8px; flex-wrap: wrap; margin: 12px 0; }
+    .modal-section { margin: 16px 0; }
+    .modal-section h3 { font-size: 14px; text-transform: uppercase; color: var(--muted);
+                         letter-spacing: 0.05em; margin: 0 0 8px; }
+    .cast-row { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 4px; }
+    .cast-item { flex: 0 0 90px; text-align: center; }
+    .cast-item img { width: 90px; height: 90px; border-radius: 50%; object-fit: cover; }
+    .cast-item .name { font-size: 11px; margin-top: 4px; font-weight: 600; }
+    .cast-item .role { font-size: 10px; color: var(--muted); }
+    .modal-providers { display: flex; gap: 8px; flex-wrap: wrap; }
+    .modal-providers img { width: 36px; height: 36px; border-radius: 6px; }
+    @media (max-width: 600px) {
+      .modal-hero { flex-direction: column; }
+      .modal-poster { width: 140px; flex: 0 0 140px; margin: 0 auto; }
+    }
   </style>
 </head>
 <body>
@@ -243,11 +337,14 @@
 
   <div class="tabs">
     <button class="tab-btn" data-tab="overview">Overview</button>
+    <button class="tab-btn" data-tab="discover">Discover</button>
+    <button class="tab-btn" data-tab="watchlist">Watchlist</button>
     <button class="tab-btn" data-tab="requests">Requests <span class="badge-count">{{ requests | length }}</span></button>
     <button class="tab-btn" data-tab="movies">Movies <span class="badge-count">{{ movies | length }}</span></button>
     <button class="tab-btn" data-tab="series">Series <span class="badge-count">{{ monitored | length }}</span></button>
     <button class="tab-btn" data-tab="wanted">Wanted <span class="badge-count">{{ wanted | length }}</span></button>
     <button class="tab-btn" data-tab="search">Search</button>
+    <button class="tab-btn" data-tab="users">Users</button>
     <button class="tab-btn" data-tab="torbox">TorBox</button>
     <button class="tab-btn" data-tab="catbox">Catbox</button>
     <button class="tab-btn" data-tab="overrides">Overrides</button>
@@ -370,6 +467,125 @@
         <div class="card-title">Top Folders (.strm count)</div>
         <div id="storage-list"></div>
       </div>
+    </div>
+  </div>
+
+  <!-- ── Discover ── -->
+  <div id="tab-discover" class="tab-pane">
+    <div class="discover-hero">
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px">
+        <input id="discover-search" class="search-bar" style="flex:1;font-size:15px"
+               placeholder="Search movies and series…" autocomplete="off">
+        <select id="discover-search-type" style="height:36px">
+          <option value="all">All</option>
+          <option value="movie">Movies only</option>
+          <option value="tv">Series only</option>
+        </select>
+      </div>
+      <div id="discover-providers" class="provider-strip"></div>
+    </div>
+    <div id="discover-search-results" class="discover-section" style="display:none">
+      <div class="section-hdr"><span class="section-title">Search results</span></div>
+      <div id="discover-search-grid" class="poster-grid"></div>
+    </div>
+    <div class="discover-section">
+      <div class="section-hdr">
+        <span class="section-title">🔥 Trending this week</span>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-secondary btn-sm" onclick="dscLoadCat('trending-day','/ui/api/discover/trending?type=all&window=day','#dsc-trending')">Today</button>
+          <button class="btn btn-secondary btn-sm" onclick="dscLoadCat('trending-week','/ui/api/discover/trending?type=all&window=week','#dsc-trending')">Week</button>
+        </div>
+      </div>
+      <div id="dsc-trending" class="poster-grid"></div>
+    </div>
+    <div class="discover-section">
+      <div class="section-hdr">
+        <span class="section-title">⭐ Popular</span>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-secondary btn-sm" onclick="dscLoadCat('pop-movies','/ui/api/discover/popular?type=movie','#dsc-popular')">Movies</button>
+          <button class="btn btn-secondary btn-sm" onclick="dscLoadCat('pop-tv','/ui/api/discover/popular?type=tv','#dsc-popular')">Series</button>
+        </div>
+      </div>
+      <div id="dsc-popular" class="poster-grid"></div>
+    </div>
+    <div class="discover-section">
+      <div class="section-hdr">
+        <span class="section-title">🎬 Now playing</span>
+        <button class="btn btn-secondary btn-sm" onclick="dscLoadCat('now','/ui/api/discover/now-playing','#dsc-now')">Refresh</button>
+      </div>
+      <div id="dsc-now" class="poster-grid"></div>
+    </div>
+    <div class="discover-section">
+      <div class="section-hdr">
+        <span class="section-title">📅 Upcoming</span>
+        <button class="btn btn-secondary btn-sm" onclick="dscLoadCat('upc','/ui/api/discover/upcoming','#dsc-upcoming')">Refresh</button>
+      </div>
+      <div id="dsc-upcoming" class="poster-grid"></div>
+    </div>
+    <div class="discover-section">
+      <div class="section-hdr">
+        <span class="section-title">🏆 Top rated</span>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-secondary btn-sm" onclick="dscLoadCat('tr-movies','/ui/api/discover/top-rated?type=movie','#dsc-toprated')">Movies</button>
+          <button class="btn btn-secondary btn-sm" onclick="dscLoadCat('tr-tv','/ui/api/discover/top-rated?type=tv','#dsc-toprated')">Series</button>
+        </div>
+      </div>
+      <div id="dsc-toprated" class="poster-grid"></div>
+    </div>
+  </div>
+
+  <!-- ── Watchlist ── -->
+  <div id="tab-watchlist" class="tab-pane">
+    <div class="section-hdr">
+      <span class="section-title">My Watchlist</span>
+      <button class="btn btn-secondary btn-sm" onclick="loadWatchlist()">↻ Refresh</button>
+    </div>
+    <div id="watchlist-grid" class="poster-grid"></div>
+    <div id="watchlist-empty" class="dim" style="display:none;text-align:center;padding:40px">
+      No items in your watchlist yet. Add some from the Discover tab.
+    </div>
+  </div>
+
+  <!-- ── Users (admin) ── -->
+  <div id="tab-users" class="tab-pane">
+    <div class="section-hdr">
+      <span class="section-title">Users &amp; Requests</span>
+    </div>
+    <div class="card">
+      <div class="card-title">Pending requests</div>
+      <table class="data-table" id="user-requests-table">
+        <thead><tr><th>User</th><th>Title</th><th>Type</th><th>IMDB</th><th>Requested</th><th>Action</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <div class="card" style="margin-top:16px">
+      <div class="card-title">Users</div>
+      <table class="data-table" id="users-table">
+        <thead><tr><th>Username</th><th>Role</th><th>Auto-approve</th><th>Enabled</th><th>Last login</th><th>Action</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <div class="card" style="margin-top:16px">
+      <div class="card-title">Create user</div>
+      <div class="form-row">
+        <div class="field"><label>Username</label><input id="new-user-name"></div>
+        <div class="field"><label>Password</label><input id="new-user-pw" type="password"></div>
+        <div class="field"><label>Role</label>
+          <select id="new-user-role"><option value="user">user</option><option value="admin">admin</option></select>
+        </div>
+        <div class="field"><label>Auto-approve</label>
+          <select id="new-user-auto"><option value="0">no</option><option value="1">yes</option></select>
+        </div>
+        <div class="field"><label>&nbsp;</label><button class="btn btn-primary" onclick="createUser()">Create</button></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Detail modal (full screen overlay) -->
+  <div id="discover-modal" class="discover-modal" style="display:none" onclick="if(event.target===this)dscCloseModal()">
+    <div class="discover-modal-body">
+      <button class="discover-modal-close" onclick="dscCloseModal()">×</button>
+      <div id="discover-modal-content"></div>
     </div>
   </div>
 
@@ -746,6 +962,31 @@
         <span class="dim" style="font-size:12px">Empty a field to clear the override and fall back to the .env value.</span>
       </div>
     </form>
+
+    <div class="card" style="margin-top:20px">
+      <div class="card-title">Radarr / Sonarr bulk import</div>
+      <p class="dim" style="font-size:12px;margin-bottom:10px">
+        Configure RADARR_URL/SONARR_URL + API keys above, save, then click test → import.
+        Import skips items already in your Mycelium library and runs in the background.
+      </p>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+        <button type="button" class="btn btn-secondary btn-sm" onclick="arrTest('radarr')">Test Radarr</button>
+        <button type="button" class="btn btn-primary btn-sm" onclick="arrRun('radarr')">▶ Import Radarr</button>
+        <button type="button" class="btn btn-secondary btn-sm" onclick="arrTest('sonarr')">Test Sonarr</button>
+        <button type="button" class="btn btn-primary btn-sm" onclick="arrRun('sonarr')">▶ Import Sonarr</button>
+        <button type="button" class="btn btn-secondary btn-sm" onclick="arrStatus()">↻ Status</button>
+      </div>
+      <div id="arr-status" class="dim" style="font-size:12px;font-family:monospace"></div>
+    </div>
+
+    <div class="card" style="margin-top:16px">
+      <div class="card-title">Auto-add now</div>
+      <p class="dim" style="font-size:12px;margin-bottom:10px">
+        Trigger the auto-add scheduler immediately. Pulls all enabled categories
+        (trending, popular, per-service top lists) and queues new items.
+      </p>
+      <button type="button" class="btn btn-primary btn-sm" onclick="autoAddNow()">▶ Run auto-add now</button>
+    </div>
   </div>
 
   <!-- ── Logs ── -->
@@ -1386,6 +1627,432 @@
   setInterval(pollActivity, 5000);
   setInterval(() => { if (Date.now() - userIdleSince > 10000) refreshOverview(); }, 30000);
   setInterval(() => { if (Date.now() - userIdleSince > 10000) location.reload(); }, 120000);
+
+  // ── Discover ──────────────────────────────────────────────────────────
+  const TMDB_IMG = 'https://image.tmdb.org/t/p/w342';
+  const TMDB_LOGO = 'https://image.tmdb.org/t/p/w92';
+  const TMDB_PROFILE = 'https://image.tmdb.org/t/p/w185';
+  let dscDiscoverInitialized = false;
+  let dscWatchlistInitialized = false;
+  let dscUsersInitialized = false;
+  let dscWatchlistSet = new Set();
+
+  function posterUrl(p) { return p ? (TMDB_IMG + p) : null; }
+  function logoUrl(p) { return p ? (TMDB_LOGO + p) : null; }
+
+  function renderPosterCard(item) {
+    const poster = posterUrl(item.poster_path);
+    const isTV = item.media_type === 'tv';
+    return `
+      <div class="poster-card" onclick='dscOpenDetails(${JSON.stringify(item.tmdb_id)}, "${item.media_type}")'>
+        ${poster ? `<img loading="lazy" src="${poster}" alt="${item.title}">` :
+                    `<div class="poster-placeholder">${item.title}</div>`}
+        <div class="poster-badge ${isTV ? 'tv' : ''}">${isTV ? 'TV' : 'Movie'}</div>
+        <div class="poster-overlay">
+          <div class="poster-title">${item.title}</div>
+          <div class="poster-meta">
+            ${item.year ? `<span>${item.year}</span>` : ''}
+            ${item.rating ? `<span class="poster-rating">★ ${item.rating}</span>` : ''}
+          </div>
+        </div>
+      </div>`;
+  }
+
+  function renderGrid(items, target) {
+    const el = document.querySelector(target);
+    if (!el) return;
+    if (!items || items.length === 0) {
+      el.innerHTML = '<div class="dim" style="padding:20px">No results</div>';
+      return;
+    }
+    el.innerHTML = items.map(renderPosterCard).join('');
+  }
+
+  async function dscLoadCat(name, url, target) {
+    const el = document.querySelector(target);
+    if (el) el.innerHTML = '<div class="dim" style="padding:20px">Loading…</div>';
+    try {
+      const r = await fetch(url);
+      const j = await r.json();
+      renderGrid(j.results || [], target);
+    } catch (e) {
+      if (el) el.innerHTML = '<div class="dim" style="padding:20px">Failed to load</div>';
+    }
+  }
+
+  async function dscLoadProviders() {
+    const r = await fetch('/ui/api/discover/providers?type=movie');
+    const j = await r.json();
+    const strip = document.getElementById('discover-providers');
+    if (!strip) return;
+    // Keep only the most popular Dutch providers
+    const wanted = [8, 119, 337, 1899, 350, 563, 271, 1773];
+    const known = (j.providers || []).filter(p => wanted.includes(p.id));
+    known.sort((a, b) => wanted.indexOf(a.id) - wanted.indexOf(b.id));
+    strip.innerHTML = '<div class="provider-chip" onclick="dscFilterProvider(null,this)"><span>All</span></div>' +
+      known.map(p => `
+        <div class="provider-chip" data-pid="${p.id}" onclick="dscFilterProvider(${p.id},this)">
+          ${p.logo_path ? `<img src="${logoUrl(p.logo_path)}" alt="">` : ''}
+          <span>${p.name}</span>
+        </div>`).join('');
+  }
+
+  async function dscFilterProvider(pid, chip) {
+    document.querySelectorAll('.provider-chip').forEach(c => c.classList.remove('active'));
+    if (chip) chip.classList.add('active');
+    if (pid === null) {
+      // Reset all sections to default
+      dscInitDiscover(true);
+      return;
+    }
+    const target = '#dsc-trending';
+    const el = document.querySelector(target);
+    if (el) el.innerHTML = '<div class="dim" style="padding:20px">Loading…</div>';
+    const r = await fetch(`/ui/api/discover/by-provider?type=movie&provider_id=${pid}`);
+    const j = await r.json();
+    renderGrid(j.results || [], target);
+    // hide other sections, only show provider-filtered
+    document.querySelectorAll('.discover-section').forEach((s, i) => {
+      s.style.display = (i === 0) ? '' : 'none';
+    });
+    const hdr = document.querySelector('#dsc-trending').previousElementSibling;
+    if (hdr) hdr.querySelector('.section-title').textContent = `📺 Available on this service`;
+  }
+
+  function dscInitDiscover(force = false) {
+    if (dscDiscoverInitialized && !force) return;
+    dscDiscoverInitialized = true;
+    document.querySelectorAll('.discover-section').forEach(s => s.style.display = '');
+    const titles = [
+      ['#dsc-trending', '🔥 Trending this week', '/ui/api/discover/trending?type=all&window=week'],
+      ['#dsc-popular', '⭐ Popular', '/ui/api/discover/popular?type=movie'],
+      ['#dsc-now', '🎬 Now playing', '/ui/api/discover/now-playing'],
+      ['#dsc-upcoming', '📅 Upcoming', '/ui/api/discover/upcoming'],
+      ['#dsc-toprated', '🏆 Top rated', '/ui/api/discover/top-rated?type=movie'],
+    ];
+    titles.forEach(([target, title, url]) => {
+      const hdr = document.querySelector(target).previousElementSibling;
+      if (hdr) hdr.querySelector('.section-title').textContent = title;
+      dscLoadCat(target, url, target);
+    });
+    dscLoadProviders();
+  }
+
+  // Search box
+  let dscSearchTimer = null;
+  document.addEventListener('DOMContentLoaded', () => {
+    const input = document.getElementById('discover-search');
+    if (!input) return;
+    input.addEventListener('input', e => {
+      clearTimeout(dscSearchTimer);
+      const q = e.target.value.trim();
+      const resultsSection = document.getElementById('discover-search-results');
+      if (!q) { resultsSection.style.display = 'none'; return; }
+      dscSearchTimer = setTimeout(async () => {
+        resultsSection.style.display = '';
+        const grid = document.getElementById('discover-search-grid');
+        grid.innerHTML = '<div class="dim" style="padding:20px">Searching…</div>';
+        const type = document.getElementById('discover-search-type').value;
+        const r = await fetch(`/ui/api/discover/search?q=${encodeURIComponent(q)}`);
+        const j = await r.json();
+        let items = j.results || [];
+        if (type !== 'all') items = items.filter(i => i.media_type === type);
+        renderGrid(items, '#discover-search-grid');
+      }, 350);
+    });
+  });
+
+  async function dscOpenDetails(tmdbId, mediaType) {
+    const modal = document.getElementById('discover-modal');
+    const content = document.getElementById('discover-modal-content');
+    content.innerHTML = '<div style="padding:40px;text-align:center" class="dim">Loading…</div>';
+    modal.style.display = 'flex';
+    try {
+      const r = await fetch(`/ui/api/discover/details?type=${mediaType}&id=${tmdbId}`);
+      const d = await r.json();
+      const poster = posterUrl(d.poster_path);
+      const inWatchlist = dscWatchlistSet.has(d.imdb_id + ':' + d.media_type);
+      const seasons = (d.seasons || []).filter(s => s.season_number >= 1);
+      const trailer = (d.trailers || [])[0];
+      content.innerHTML = `
+        <div class="modal-hero">
+          <div class="modal-poster">
+            ${poster ? `<img src="${poster}">` : '<div class="poster-placeholder">No poster</div>'}
+          </div>
+          <div class="modal-info">
+            <h2>${d.title} ${d.year ? `<span style="color:var(--muted);font-weight:400">(${d.year})</span>` : ''}</h2>
+            ${d.tagline ? `<div class="tagline">${d.tagline}</div>` : ''}
+            <div class="meta-line">
+              ${d.rating ? `<span class="badge">★ ${d.rating} (${d.votes} votes)</span>` : ''}
+              ${d.runtime ? `<span class="badge">${d.runtime} min</span>` : ''}
+              ${(d.genres || []).map(g => `<span class="badge">${g}</span>`).join(' ')}
+              ${d.status ? `<span class="badge">${d.status}</span>` : ''}
+              ${mediaType === 'tv' && d.number_of_seasons ? `<span class="badge">${d.number_of_seasons} seasons / ${d.number_of_episodes} eps</span>` : ''}
+            </div>
+            <div class="overview">${d.overview || 'No overview available.'}</div>
+            <div class="modal-actions">
+              <button class="btn btn-primary" onclick='dscAddToLibrary(${tmdbId}, "${mediaType}", ${JSON.stringify(d.title)})'>+ Add to library</button>
+              <button class="btn btn-secondary" onclick='dscToggleWatchlist("${d.imdb_id || ''}", ${tmdbId}, "${mediaType}", ${JSON.stringify(d.title)}, ${JSON.stringify(d.poster_path || '')}, this)'>
+                ${inWatchlist ? '★ In watchlist' : '☆ Add to watchlist'}
+              </button>
+              ${trailer ? `<a class="btn btn-secondary" target="_blank" href="https://www.youtube.com/watch?v=${trailer.key}">▶ Trailer</a>` : ''}
+              ${d.imdb_id ? `<a class="btn btn-secondary" target="_blank" href="https://www.imdb.com/title/${d.imdb_id}/">IMDB</a>` : ''}
+            </div>
+            ${(d.providers && d.providers.flatrate && d.providers.flatrate.length) ? `
+              <div class="modal-section">
+                <h3>Streaming on</h3>
+                <div class="modal-providers">
+                  ${d.providers.flatrate.map(p => `<img src="${logoUrl(p.logo_path)}" title="${p.name}" alt="${p.name}">`).join('')}
+                </div>
+              </div>` : ''}
+          </div>
+        </div>
+        ${seasons.length ? `
+          <div class="modal-section">
+            <h3>Seasons</h3>
+            <div class="cast-row">
+              ${seasons.map(s => `
+                <div class="cast-item">
+                  ${s.poster_path ? `<img src="${TMDB_LOGO}${s.poster_path}">` : '<div style="width:90px;height:90px;background:var(--bg);border-radius:50%"></div>'}
+                  <div class="name">S${s.season_number}</div>
+                  <div class="role">${s.episode_count} eps</div>
+                </div>`).join('')}
+            </div>
+          </div>` : ''}
+        ${(d.cast && d.cast.length) ? `
+          <div class="modal-section">
+            <h3>Cast</h3>
+            <div class="cast-row">
+              ${d.cast.map(c => `
+                <div class="cast-item">
+                  ${c.profile_path ? `<img src="${TMDB_PROFILE}${c.profile_path}">` : '<div style="width:90px;height:90px;background:var(--bg);border-radius:50%"></div>'}
+                  <div class="name">${c.name}</div>
+                  <div class="role">${c.character || ''}</div>
+                </div>`).join('')}
+            </div>
+          </div>` : ''}
+        ${(d.recommendations && d.recommendations.length) ? `
+          <div class="modal-section">
+            <h3>You might also like</h3>
+            <div class="poster-grid">${d.recommendations.map(renderPosterCard).join('')}</div>
+          </div>` : ''}
+      `;
+    } catch (e) {
+      content.innerHTML = '<div style="padding:40px;text-align:center" class="dim">Failed to load details</div>';
+    }
+  }
+
+  function dscCloseModal() {
+    document.getElementById('discover-modal').style.display = 'none';
+  }
+
+  async function dscAddToLibrary(tmdbId, mediaType, title) {
+    const btn = event && event.target;
+    if (btn) { btn.disabled = true; btn.textContent = 'Adding…'; }
+    try {
+      const r = await fetch('/ui/api/discover/add', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ tmdb_id: tmdbId, media_type: mediaType, title })
+      });
+      const j = await r.json();
+      if (j.error) {
+        alert('Failed: ' + j.error);
+        if (btn) { btn.disabled = false; btn.textContent = '+ Add to library'; }
+        return;
+      }
+      if (btn) {
+        btn.textContent = j.status === 'pending' ? '⏳ Pending approval' :
+                          j.status === 'approved' ? '✓ Approved' : '✓ Queued';
+        btn.className = 'btn btn-secondary';
+      }
+    } catch (e) {
+      alert('Failed: ' + e.message);
+      if (btn) { btn.disabled = false; btn.textContent = '+ Add to library'; }
+    }
+  }
+
+  async function dscToggleWatchlist(imdbId, tmdbId, mediaType, title, posterPath, btn) {
+    if (!imdbId) { alert('No IMDB ID available'); return; }
+    const key = imdbId + ':' + mediaType;
+    const isIn = dscWatchlistSet.has(key);
+    const url = isIn ? '/ui/api/watchlist/remove' : '/ui/api/watchlist/add';
+    const r = await fetch(url, {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ imdb_id: imdbId, tmdb_id: tmdbId, media_type: mediaType,
+                              title, poster_path: posterPath })
+    });
+    if (r.status === 401) { alert('Login required'); return; }
+    const j = await r.json();
+    if (j.ok) {
+      if (isIn) { dscWatchlistSet.delete(key); btn.textContent = '☆ Add to watchlist'; }
+      else { dscWatchlistSet.add(key); btn.textContent = '★ In watchlist'; }
+      dscWatchlistInitialized = false;  // force refresh next time
+    }
+  }
+
+  async function loadWatchlist() {
+    const grid = document.getElementById('watchlist-grid');
+    const empty = document.getElementById('watchlist-empty');
+    grid.innerHTML = '<div class="dim" style="padding:20px">Loading…</div>';
+    const r = await fetch('/ui/api/watchlist');
+    const j = await r.json();
+    const items = (j.items || []).map(it => ({
+      tmdb_id: it.tmdb_id, media_type: it.media_type, title: it.title,
+      poster_path: it.poster_path, year: '', rating: 0
+    }));
+    if (items.length === 0) {
+      grid.innerHTML = '';
+      empty.style.display = '';
+      dscWatchlistSet = new Set();
+      return;
+    }
+    empty.style.display = 'none';
+    grid.innerHTML = items.map(renderPosterCard).join('');
+    dscWatchlistSet = new Set((j.items || []).map(it => it.imdb_id + ':' + it.media_type));
+    dscWatchlistInitialized = true;
+  }
+
+  // ── Users (admin) ────────────────────────────────────────────────────
+  async function loadUsersTab() {
+    const reqTbody = document.querySelector('#user-requests-table tbody');
+    const usersTbody = document.querySelector('#users-table tbody');
+    reqTbody.innerHTML = '<tr><td colspan="6" class="dim">Loading…</td></tr>';
+
+    try {
+      const [reqs, users] = await Promise.all([
+        fetch('/ui/api/user-requests?status=pending').then(r => r.json()),
+        fetch('/ui/api/users').then(r => r.json()),
+      ]);
+      if (users.error) {
+        reqTbody.innerHTML = `<tr><td colspan="6" class="dim">${users.error}</td></tr>`;
+        return;
+      }
+      reqTbody.innerHTML = (reqs.items || []).length === 0 ?
+        '<tr><td colspan="6" class="dim">No pending requests</td></tr>' :
+        (reqs.items || []).map(r => `
+          <tr>
+            <td>${r.username}</td>
+            <td>${r.title}</td>
+            <td>${r.media_type}</td>
+            <td><a href="https://www.imdb.com/title/${r.imdb_id}/" target="_blank">${r.imdb_id}</a></td>
+            <td>${r.created_at}</td>
+            <td>
+              <button class="btn btn-primary btn-sm" onclick="approveReq(${r.id})">✓ Approve</button>
+              <button class="btn btn-secondary btn-sm" onclick="denyReq(${r.id})">✗ Deny</button>
+            </td>
+          </tr>`).join('');
+      usersTbody.innerHTML = (users.users || []).map(u => `
+        <tr>
+          <td>${u.username}</td>
+          <td>${u.role}</td>
+          <td>${u.auto_approve ? '✓' : '—'}</td>
+          <td>${u.enabled ? '✓' : '✗'}</td>
+          <td>${u.last_login || '—'}</td>
+          <td>
+            <button class="btn btn-secondary btn-sm" onclick="toggleAutoApprove(${u.id}, ${u.auto_approve ? 0 : 1})">${u.auto_approve ? 'Disable auto' : 'Enable auto'}</button>
+            <button class="btn btn-secondary btn-sm" onclick="toggleEnabled(${u.id}, ${u.enabled ? 0 : 1})">${u.enabled ? 'Disable' : 'Enable'}</button>
+            <button class="btn btn-secondary btn-sm" onclick="deleteUser(${u.id}, ${JSON.stringify(u.username)})">Delete</button>
+          </td>
+        </tr>`).join('');
+      dscUsersInitialized = true;
+    } catch (e) {
+      reqTbody.innerHTML = `<tr><td colspan="6" class="dim">Error: ${e.message}</td></tr>`;
+    }
+  }
+
+  async function approveReq(id) {
+    await fetch(`/ui/api/user-requests/${id}/approve`, { method: 'POST' });
+    loadUsersTab();
+  }
+  async function denyReq(id) {
+    const note = prompt('Reason for denial? (optional)');
+    await fetch(`/ui/api/user-requests/${id}/deny`, {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ note })
+    });
+    loadUsersTab();
+  }
+  async function toggleAutoApprove(id, val) {
+    await fetch(`/ui/api/users/${id}/update`, {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ auto_approve: !!val })
+    });
+    loadUsersTab();
+  }
+  async function toggleEnabled(id, val) {
+    await fetch(`/ui/api/users/${id}/update`, {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ enabled: !!val })
+    });
+    loadUsersTab();
+  }
+  async function deleteUser(id, name) {
+    if (!confirm(`Delete user ${name}?`)) return;
+    await fetch(`/ui/api/users/${id}/delete`, { method: 'POST' });
+    loadUsersTab();
+  }
+  async function createUser() {
+    const username = document.getElementById('new-user-name').value.trim();
+    const password = document.getElementById('new-user-pw').value;
+    const role = document.getElementById('new-user-role').value;
+    const auto = document.getElementById('new-user-auto').value === '1';
+    if (!username || password.length < 4) { alert('Username + password (≥4) required'); return; }
+    const r = await fetch('/ui/api/users/create', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ username, password, role, auto_approve: auto })
+    });
+    const j = await r.json();
+    if (j.error) { alert(j.error); return; }
+    document.getElementById('new-user-name').value = '';
+    document.getElementById('new-user-pw').value = '';
+    loadUsersTab();
+  }
+
+  // Hook tab switching to lazy-load discover/watchlist/users
+  document.addEventListener('click', e => {
+    const btn = e.target.closest('.tab-btn');
+    if (!btn) return;
+    const tab = btn.dataset.tab;
+    if (tab === 'discover') setTimeout(() => dscInitDiscover(), 50);
+    else if (tab === 'watchlist') setTimeout(() => loadWatchlist(), 50);
+    else if (tab === 'users') setTimeout(() => loadUsersTab(), 50);
+  });
+
+  // Preload current watchlist set on page load so the modal can show correct state
+  fetch('/ui/api/watchlist').then(r => r.json()).then(j => {
+    dscWatchlistSet = new Set((j.items || []).map(it => it.imdb_id + ':' + it.media_type));
+  }).catch(() => {});
+
+  // ── Radarr / Sonarr import helpers ───────────────────────────────────
+  async function arrTest(kind) {
+    const r = await fetch(`/ui/api/arr-import/test-${kind}`, { method: 'POST' });
+    const j = await r.json();
+    const out = document.getElementById('arr-status');
+    out.textContent = j.ok ? `✓ ${kind} reachable` : `✗ ${kind} unreachable: ${j.error || ''}`;
+  }
+  async function arrRun(kind) {
+    if (!confirm(`Start ${kind} import? Skipped items will be ignored.`)) return;
+    const r = await fetch(`/ui/api/arr-import/${kind}`, {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ only_monitored: true })
+    });
+    const j = await r.json();
+    if (j.error) { alert(j.error); return; }
+    document.getElementById('arr-status').textContent = `Started ${kind} import…`;
+    setTimeout(arrStatus, 2000);
+  }
+  async function arrStatus() {
+    const r = await fetch('/ui/api/arr-import/status');
+    const j = await r.json();
+    const s = `${j.kind || '—'}: ${j.message || 'idle'}  [${j.done}/${j.total}, +${j.added} ⏭${j.skipped} ✗${j.errors}]`;
+    document.getElementById('arr-status').textContent = s;
+    if (j.running) setTimeout(arrStatus, 2000);
+  }
+  async function autoAddNow() {
+    const r = await fetch('/ui/api/auto-add-now', { method: 'POST' });
+    const j = await r.json();
+    alert(j.message || j.error || 'OK');
+  }
 </script>
 </body>
 </html>
