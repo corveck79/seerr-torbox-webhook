@@ -1,0 +1,271 @@
+import { useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { api } from '../api';
+
+export default function Admin() {
+  const qc = useQueryClient();
+  const { data: pending } = useQuery({
+    queryKey: ['user-requests', 'pending'],
+    queryFn: () => api.userRequests('pending'),
+  });
+  const { data: users } = useQuery({ queryKey: ['users'], queryFn: api.users });
+  const { data: session } = useQuery({ queryKey: ['session'], queryFn: api.session });
+
+  const isBootstrap = !users?.users || users.users.length === 0;
+
+  const approveMut = useMutation({
+    mutationFn: (id: number) => api.approveRequest(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['user-requests'] }),
+  });
+  const denyMut = useMutation({
+    mutationFn: ({ id, note }: { id: number; note?: string }) => api.denyRequest(id, note),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['user-requests'] }),
+  });
+  const updateMut = useMutation({
+    mutationFn: ({ id, fields }: { id: number; fields: any }) => api.updateUser(id, fields),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['users'] }),
+  });
+  const deleteMut = useMutation({
+    mutationFn: (id: number) => api.deleteUser(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['users'] }),
+  });
+
+  return (
+    <div className="space-y-8">
+      {isBootstrap && (
+        <div className="bg-accent/10 border border-accent/30 rounded-lg p-4 text-sm">
+          <strong>First-run bootstrap:</strong> No users exist yet. The first account you create
+          will become the admin.
+        </div>
+      )}
+
+      <section>
+        <h2 className="text-lg font-bold mb-3">Pending requests</h2>
+        {!pending?.items || pending.items.length === 0 ? (
+          <div className="text-muted text-sm">No pending requests</div>
+        ) : (
+          <table className="w-full text-sm">
+            <thead className="text-xs text-muted uppercase border-b border-border">
+              <tr>
+                <th className="text-left py-2 px-3">User</th>
+                <th className="text-left py-2 px-3">Title</th>
+                <th className="text-left py-2 px-3">Type</th>
+                <th className="text-left py-2 px-3">IMDB</th>
+                <th className="text-left py-2 px-3">Requested</th>
+                <th className="text-right py-2 px-3">Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {pending.items.map((r) => (
+                <tr key={r.id} className="border-b border-border/50">
+                  <td className="py-2 px-3 font-medium">{r.username}</td>
+                  <td className="py-2 px-3">{r.title}</td>
+                  <td className="py-2 px-3 text-muted">{r.media_type}</td>
+                  <td className="py-2 px-3 text-muted text-xs">
+                    <a href={`https://www.imdb.com/title/${r.imdb_id}/`} target="_blank" rel="noopener">{r.imdb_id}</a>
+                  </td>
+                  <td className="py-2 px-3 text-muted text-xs">{r.created_at}</td>
+                  <td className="py-2 px-3 text-right">
+                    <button
+                      onClick={() => approveMut.mutate(r.id)}
+                      className="px-3 py-1 rounded bg-ok/20 text-ok text-xs hover:bg-ok/30"
+                    >
+                      ✓ Approve
+                    </button>
+                    <button
+                      onClick={() => denyMut.mutate({ id: r.id, note: prompt('Reason?') || '' })}
+                      className="ml-2 px-3 py-1 rounded bg-red-500/20 text-red-400 text-xs hover:bg-red-500/30"
+                    >
+                      ✗ Deny
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </section>
+
+      <section>
+        <h2 className="text-lg font-bold mb-3">Users</h2>
+        <CreateUserForm />
+        {users?.users && users.users.length > 0 && (
+          <table className="w-full text-sm mt-4">
+            <thead className="text-xs text-muted uppercase border-b border-border">
+              <tr>
+                <th className="text-left py-2 px-3">Username</th>
+                <th className="text-left py-2 px-3">Role</th>
+                <th className="text-left py-2 px-3">Auto-approve</th>
+                <th className="text-left py-2 px-3">Enabled</th>
+                <th className="text-left py-2 px-3">Last login</th>
+                <th className="text-right py-2 px-3">Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {users.users.map((u) => (
+                <tr key={u.id} className="border-b border-border/50">
+                  <td className="py-2 px-3 font-medium">{u.username}</td>
+                  <td className="py-2 px-3 text-muted">{u.role}</td>
+                  <td className="py-2 px-3">
+                    <Toggle
+                      on={u.auto_approve}
+                      onClick={() => updateMut.mutate({ id: u.id, fields: { auto_approve: !u.auto_approve } })}
+                    />
+                  </td>
+                  <td className="py-2 px-3">
+                    <Toggle
+                      on={u.enabled}
+                      onClick={() => updateMut.mutate({ id: u.id, fields: { enabled: !u.enabled } })}
+                    />
+                  </td>
+                  <td className="py-2 px-3 text-muted text-xs">{u.last_login || '—'}</td>
+                  <td className="py-2 px-3 text-right">
+                    {session?.user?.id !== u.id && (
+                      <button
+                        onClick={() => confirm(`Delete ${u.username}?`) && deleteMut.mutate(u.id)}
+                        className="px-3 py-1 rounded bg-red-500/20 text-red-400 text-xs hover:bg-red-500/30"
+                      >
+                        Delete
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </section>
+
+      <ArrImportPanel />
+    </div>
+  );
+}
+
+function CreateUserForm() {
+  const qc = useQueryClient();
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [role, setRole] = useState<'user' | 'admin'>('user');
+  const [autoApprove, setAutoApprove] = useState(false);
+  const [msg, setMsg] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
+  const mut = useMutation({
+    mutationFn: () => api.createUser({ username, password, role, auto_approve: autoApprove }),
+    onSuccess: (r) => {
+      setMsg({ kind: 'ok', text: r.message || `Created ${username}` });
+      setUsername('');
+      setPassword('');
+      qc.invalidateQueries({ queryKey: ['users'] });
+    },
+    onError: (e: any) => setMsg({ kind: 'err', text: e.message }),
+  });
+
+  return (
+    <div className="bg-card rounded-lg border border-border p-4">
+      <div className="flex flex-wrap gap-3 items-end">
+        <div>
+          <label className="block text-[10px] uppercase tracking-wider text-muted mb-1">Username</label>
+          <input
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            className="bg-bg border border-border rounded px-3 py-2 text-sm"
+          />
+        </div>
+        <div>
+          <label className="block text-[10px] uppercase tracking-wider text-muted mb-1">Password</label>
+          <input
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            className="bg-bg border border-border rounded px-3 py-2 text-sm"
+          />
+        </div>
+        <div>
+          <label className="block text-[10px] uppercase tracking-wider text-muted mb-1">Role</label>
+          <select
+            value={role}
+            onChange={(e) => setRole(e.target.value as any)}
+            className="bg-bg border border-border rounded px-3 py-2 text-sm"
+          >
+            <option value="user">user</option>
+            <option value="admin">admin</option>
+          </select>
+        </div>
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={autoApprove}
+            onChange={(e) => setAutoApprove(e.target.checked)}
+          />
+          Auto-approve
+        </label>
+        <button
+          type="button"
+          disabled={!username || password.length < 4 || mut.isPending}
+          onClick={() => mut.mutate()}
+          className="px-4 py-2 rounded bg-accent hover:bg-accent/90 text-sm font-semibold
+                      disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {mut.isPending ? 'Creating…' : 'Create user'}
+        </button>
+      </div>
+      {msg && (
+        <div className={`mt-3 text-xs ${msg.kind === 'ok' ? 'text-ok' : 'text-red-400'}`}>{msg.text}</div>
+      )}
+    </div>
+  );
+}
+
+function Toggle({ on, onClick }: { on: boolean; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`w-10 h-5 rounded-full transition relative ${on ? 'bg-accent' : 'bg-border'}`}
+    >
+      <span
+        className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${
+          on ? 'translate-x-5' : 'translate-x-0.5'
+        }`}
+      />
+    </button>
+  );
+}
+
+function ArrImportPanel() {
+  const [status, setStatus] = useState<string>('');
+  const test = async (kind: 'radarr' | 'sonarr') => {
+    try {
+      const r = await api.arrTest(kind);
+      setStatus(r.ok ? `✓ ${kind} reachable` : `✗ ${kind} unreachable`);
+    } catch (e: any) {
+      setStatus(`✗ ${e.message}`);
+    }
+  };
+  const run = async (kind: 'radarr' | 'sonarr') => {
+    if (!confirm(`Start ${kind} import?`)) return;
+    await api.arrRun(kind);
+    setStatus(`Started ${kind} import…`);
+    const poll = setInterval(async () => {
+      const s = await api.arrStatus();
+      setStatus(`${s.kind || '—'}: ${s.message} [${s.done}/${s.total}, +${s.added} ⏭${s.skipped} ✗${s.errors}]`);
+      if (!s.running) clearInterval(poll);
+    }, 2000);
+  };
+  return (
+    <section>
+      <h2 className="text-lg font-bold mb-3">Radarr / Sonarr import</h2>
+      <div className="bg-card rounded-lg border border-border p-4">
+        <p className="text-muted text-sm mb-3">
+          Configure RADARR_URL/SONARR_URL + API keys in Settings, then test and run import here.
+        </p>
+        <div className="flex gap-2 flex-wrap mb-3">
+          <button onClick={() => test('radarr')} className="px-3 py-1.5 rounded border border-border text-sm hover:bg-bg">Test Radarr</button>
+          <button onClick={() => run('radarr')} className="px-3 py-1.5 rounded bg-accent text-sm font-semibold">▶ Import Radarr</button>
+          <button onClick={() => test('sonarr')} className="px-3 py-1.5 rounded border border-border text-sm hover:bg-bg">Test Sonarr</button>
+          <button onClick={() => run('sonarr')} className="px-3 py-1.5 rounded bg-accent text-sm font-semibold">▶ Import Sonarr</button>
+        </div>
+        <div className="font-mono text-xs text-muted">{status}</div>
+      </div>
+    </section>
+  );
+}

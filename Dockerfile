@@ -1,3 +1,12 @@
+# ── Stage 1: build the React + Vite frontend ─────────────────────────────────
+FROM node:22-alpine AS frontend
+WORKDIR /build
+COPY frontend/package.json frontend/package-lock.json* ./
+RUN npm install --no-audit --no-fund
+COPY frontend/ ./
+RUN npm run build
+
+# ── Stage 2: Python runtime ──────────────────────────────────────────────────
 FROM python:3.12-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -12,6 +21,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY *.py ./
 COPY templates/ ./templates/
+# Built SPA from stage 1 (Vite writes to ../static/app relative to frontend/)
+COPY --from=frontend /static/app/ ./static/app/
 
 EXPOSE 8088
 

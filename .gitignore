@@ -3,3 +3,7 @@ __pycache__/
 *.pyc
 .pytest_cache/
 .env
+# React/Vite build artefacts — rebuilt via Dockerfile or `npm run build`
+frontend/node_modules/
+frontend/dist/
+static/app/

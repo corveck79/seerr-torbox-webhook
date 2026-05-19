@@ -63,7 +63,7 @@ configure_logging()
 log_buffer.install()
 log = logging.getLogger("mycelium")
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder="static", static_url_path="/static")
 app.secret_key = cfg.AUTH_SESSION_SECRET
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 app.config["SESSION_COOKIE_HTTPONLY"] = True
@@ -1231,6 +1231,20 @@ def ui_api_user_request_deny(req_id: int):
 
 # ── User management (admin) ──────────────────────────────────────────────────
 
+@app.get("/ui/api/session")
+def ui_api_session():
+    """Current session info: who am I, what role, do I have auto_approve."""
+    rec = auth.current_user_record()
+    if not rec:
+        return jsonify(authenticated=False, user=None)
+    return jsonify(authenticated=True, user={
+        "id": rec.get("id"),
+        "username": rec.get("username"),
+        "role": rec.get("role"),
+        "auto_approve": bool(rec.get("auto_approve")),
+    })
+
+
 @app.get("/ui/api/users")
 def ui_api_users():
     if not auth.is_admin():
@@ -1361,6 +1375,57 @@ def ui_api_arr_import_test_sonarr():
         return jsonify(ok=False, error="url + api_key required"), 400
     import sonarr
     return jsonify(ok=sonarr.ping(url, key))
+
+
+# ── Modern SPA (React + Vite) served at /app/* ───────────────────────────────
+
+import os as _os
+from flask import send_from_directory as _send
+
+_SPA_DIR = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "static", "app")
+_SPA_ASSET_DIR = _os.path.join(_SPA_DIR, "assets")
+
+
+def _spa_index():
+    """Serve the SPA index with a fresh CSRF meta tag injected.
+    Falls back to a friendly message if the build is missing."""
+    index_path = _os.path.join(_SPA_DIR, "index.html")
+    if not _os.path.exists(index_path):
+        return (
+            "<h1>Mycelium SPA not built</h1>"
+            "<p>Run <code>cd frontend && npm install && npm run build</code> "
+            "or rebuild the Docker image. The classic UI is at "
+            "<a href='/ui'>/ui</a>.</p>"
+        ), 503
+    with open(index_path, encoding="utf-8") as f:
+        html = f.read()
+    token = generate_csrf()
+    html = html.replace(
+        '<meta name="csrf-token" content="" />',
+        f'<meta name="csrf-token" content="{token}" />',
+    )
+    return html, 200, {"Content-Type": "text/html; charset=utf-8"}
+
+
+@app.get("/app")
+@app.get("/app/")
+def app_root():
+    return _spa_index()
+
+
+@app.get("/app/assets/<path:filename>")
+def app_assets(filename: str):
+    return _send(_SPA_ASSET_DIR, filename)
+
+
+@app.get("/app/<path:subpath>")
+def app_catchall(subpath: str):
+    # Serve static files from the build dir if they exist; otherwise serve the
+    # SPA index so React Router can take over the route.
+    full = _os.path.join(_SPA_DIR, subpath)
+    if _os.path.isfile(full):
+        return _send(_SPA_DIR, subpath)
+    return _spa_index()
 
 
 @app.route(

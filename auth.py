@@ -44,6 +44,9 @@ _PUBLIC_PATHS = (
     "/setup/",
     "/dav",
     "/stream/",
+    "/app/login",
+    "/app/assets",
+    "/static",
 )
 
 
@@ -263,4 +266,6 @@ def install_before_request(app) -> None:
             return None
         if path.startswith("/ui/api/") or request.headers.get("Accept", "").startswith("application/json"):
             return jsonify(error="unauthorized"), 401
+        if path.startswith("/app"):
+            return redirect("/app/login?next=" + path)
         return redirect(url_for("login_view", next=path))
