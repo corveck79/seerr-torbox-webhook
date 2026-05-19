@@ -30,12 +30,12 @@ def merge_duplicate_versions(timeout: int = 60) -> bool:
         log.warning("JELLYFIN_URL not set; skipping MergeVersions")
         return False
     url = f"{JELLYFIN_URL.rstrip('/')}/Items/MergeVersions"
-    headers = {}
+    headers = {"Content-Type": "application/json"}
     if JELLYFIN_API_KEY:
         headers["X-Emby-Token"] = JELLYFIN_API_KEY
     log.info("Triggering Jellyfin MergeVersions: %s", url)
     try:
-        resp = requests.post(url, headers=headers, timeout=timeout)
+        resp = requests.post(url, headers=headers, json={}, timeout=timeout)
     except requests.RequestException as exc:
         log.error("Jellyfin MergeVersions request failed: %s", exc)
         return False
