@@ -227,8 +227,12 @@ def _check_auth() -> None:
 
 @app.get("/health")
 def health_simple():
-    """Lightweight liveness probe — process is up."""
-    return jsonify(status="ok")
+    """Liveness probe used by Docker HEALTHCHECK — process up + DB reachable."""
+    try:
+        db.get_recent(1)
+        return jsonify(status="ok")
+    except Exception as exc:
+        return jsonify(status="degraded", error=str(exc)[:120]), 503
 
 
 @app.get("/healthz")

@@ -14,8 +14,10 @@ COPY *.py ./
 
 EXPOSE 8088
 
-HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+HEALTHCHECK --interval=60s --timeout=10s --start-period=30s --retries=3 \
   CMD python -c "import urllib.request,os,sys; \
-urllib.request.urlopen(f'http://127.0.0.1:{os.environ.get(\"LISTEN_PORT\",\"8088\")}/health').read(); sys.exit(0)" || exit 1
+port=os.environ.get('LISTEN_PORT','8088'); \
+r=urllib.request.urlopen(f'http://127.0.0.1:{port}/health',timeout=5); \
+sys.exit(0 if r.status==200 else 1)" || exit 1
 
 CMD ["sh", "-c", "gunicorn --bind ${LISTEN_HOST}:${LISTEN_PORT} --workers 2 --threads 4 --access-logfile - app:app"]
