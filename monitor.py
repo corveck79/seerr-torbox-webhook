@@ -238,3 +238,37 @@ def sync_movies() -> None:
         db.update_media_item_status(imdb_id, "movie", status, strm_found=found)
 
     log.info("Monitor: movie sync complete")
+
+
+def sync_series() -> None:
+    """Sync approved TV requests from Seerr into monitored_series."""
+    log.info("Monitor: syncing series requests from Seerr")
+    try:
+        items = seerr.list_approved_requests(take=100)
+    except Exception as exc:
+        log.error("Monitor: failed to fetch Seerr requests: %s", exc)
+        return
+
+    added = 0
+    for item in items:
+        media = item.get("media") or {}
+        raw_type = (media.get("mediaType") or media.get("media_type") or "").lower()
+        if raw_type not in ("tv", "series"):
+            continue
+
+        title = media.get("title") or media.get("originalTitle") or media.get("name") or ""
+        imdb_id = media.get("imdbId") or media.get("imdb_id")
+        if not imdb_id:
+            tmdb_id_val = media.get("tmdbId")
+            if tmdb_id_val:
+                imdb_id = tmdb.tmdb_to_imdb(tmdb_id_val, media_type="tv")
+        if not imdb_id or not title:
+            continue
+
+        seasons_raw = item.get("seasons") or []
+        seasons = sorted({s.get("seasonNumber") for s in seasons_raw if s.get("seasonNumber")})
+
+        add_series(imdb_id, title, seasons)
+        added += 1
+
+    log.info("Monitor: series sync complete (%d series)", added)

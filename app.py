@@ -170,7 +170,12 @@ def _start_scheduler() -> BackgroundScheduler:
             trigger="interval", minutes=MOVIE_SYNC_INTERVAL_MINUTES,
             id="movie_sync", next_run_time=None,
         )
-        log.info("Scheduled movie sync every %dm", MOVIE_SYNC_INTERVAL_MINUTES)
+        scheduler.add_job(
+            monitor.sync_series,
+            trigger="interval", minutes=MOVIE_SYNC_INTERVAL_MINUTES,
+            id="series_sync", next_run_time=None,
+        )
+        log.info("Scheduled movie+series sync every %dm", MOVIE_SYNC_INTERVAL_MINUTES)
 
     if STRM_GENERATOR_INTERVAL_HOURS > 0:
         scheduler.add_job(
@@ -303,6 +308,7 @@ def _delayed(seconds: float, target, name: str) -> None:
 
 
 _delayed(15.0, monitor.sync_movies, "movie-sync-init")
+_delayed(20.0, monitor.sync_series, "series-sync-init")
 _delayed(30.0, strm_generator.run_and_refresh, "strm-init")
 _delayed(60.0, library_sync.resolve_unknowns, "resolve-unknowns-init")
 
