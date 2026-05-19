@@ -171,60 +171,68 @@ def rank_streams(
     override: dict | None = None,
 ) -> list[TorrentioStream]:
     """Return streams sorted by preference. Per-show override (dict from DB) can replace
-    quality_preference, allow_4k, prefer_hevc on a case-by-case basis."""
+    quality_preference, allow_4k, prefer_hevc on a case-by-case basis. Global filters
+    are pulled live from the settings overlay so the UI can toggle them at runtime."""
     if not streams:
         return []
 
+    import settings as _settings
     override = override or {}
     quality_pref = (
         [q.strip() for q in (override.get("quality_preference") or "").split(",") if q.strip()]
-        or QUALITY_PREFERENCE
+        or _settings.get("QUALITY_PREFERENCE", QUALITY_PREFERENCE)
     )
-    allow_4k = ALLOW_4K if override.get("allow_4k") is None else bool(override["allow_4k"])
-    prefer_hevc = PREFER_HEVC if override.get("prefer_hevc") is None else bool(override["prefer_hevc"])
+    allow_4k = _settings.get("ALLOW_4K", ALLOW_4K) if override.get("allow_4k") is None else bool(override["allow_4k"])
+    prefer_hevc = _settings.get("PREFER_HEVC", PREFER_HEVC) if override.get("prefer_hevc") is None else bool(override["prefer_hevc"])
+    exclude_remux = _settings.get("EXCLUDE_REMUX", EXCLUDE_REMUX)
+    exclude_cam = _settings.get("EXCLUDE_CAM", EXCLUDE_CAM)
+    prefer_webdl = _settings.get("PREFER_WEBDL", PREFER_WEBDL)
+    min_seeders = _settings.get("MIN_SEEDERS", MIN_SEEDERS)
+    max_size_gb = _settings.get("MAX_SIZE_GB", MAX_SIZE_GB)
+    audio_pref = _settings.get("AUDIO_LANGUAGE_PREFERENCE", AUDIO_LANGUAGE_PREFERENCE)
 
     candidates = streams if allow_4k else [s for s in streams if s.quality != "2160p"]
     if not candidates:
         log.warning("No non-4K candidates; falling back to full list")
         candidates = list(streams)
 
-    if EXCLUDE_REMUX:
+    if exclude_remux:
         filtered = [s for s in candidates if not _REMUX_RE.search(f"{s.name} {s.title}")]
         if filtered:
             candidates = filtered
         else:
             log.warning("Only remux/bluray candidates available; allowing them")
 
-    if EXCLUDE_CAM:
+    if exclude_cam:
         filtered = [s for s in candidates if not _CAM_RE.search(f"{s.name} {s.title}")]
         if filtered:
             candidates = filtered
         else:
             log.warning("Only cam/telesync candidates available; allowing them")
 
-    if MIN_SEEDERS > 0:
-        filtered = [s for s in candidates if s.seeders == 0 or s.seeders >= MIN_SEEDERS]
+    if min_seeders > 0:
+        filtered = [s for s in candidates if s.seeders == 0 or s.seeders >= min_seeders]
         if filtered:
             candidates = filtered
         else:
-            log.warning("No candidates meet MIN_SEEDERS=%d; allowing all", MIN_SEEDERS)
+            log.warning("No candidates meet MIN_SEEDERS=%d; allowing all", min_seeders)
 
-    if MAX_SIZE_GB > 0:
-        filtered = [s for s in candidates if s.size_gb == 0.0 or s.size_gb <= MAX_SIZE_GB]
+    if max_size_gb > 0:
+        filtered = [s for s in candidates if s.size_gb == 0.0 or s.size_gb <= max_size_gb]
         if filtered:
             candidates = filtered
         else:
-            log.warning("No candidates within MAX_SIZE_GB=%d; allowing all", MAX_SIZE_GB)
+            log.warning("No candidates within MAX_SIZE_GB=%d; allowing all", max_size_gb)
 
     def _lang_score(s: TorrentioStream) -> int:
-        if not AUDIO_LANGUAGE_PREFERENCE:
+        if not audio_pref:
             return 0
         if not s.languages:
-            return len(AUDIO_LANGUAGE_PREFERENCE)  # unknown — neutral
-        for idx, want in enumerate(AUDIO_LANGUAGE_PREFERENCE):
+            return len(audio_pref)
+        for idx, want in enumerate(audio_pref):
             if want in s.languages or "multi" in s.languages:
                 return idx
-        return len(AUDIO_LANGUAGE_PREFERENCE) + 1
+        return len(audio_pref) + 1
 
     def sort_key(s: TorrentioStream) -> tuple:
         blob = f"{s.name} {s.title}"
@@ -232,7 +240,7 @@ def rank_streams(
             0 if prefer_season_pack and s.is_season_pack else 1,
             _quality_rank(s, quality_pref),
             _lang_score(s),
-            0 if PREFER_WEBDL and _WEBDL_RE.search(blob) else 1,
+            0 if prefer_webdl and _WEBDL_RE.search(blob) else 1,
             0 if prefer_hevc and _HEVC_RE.search(blob) else 1,
             -s.seeders,
             s.size_gb,

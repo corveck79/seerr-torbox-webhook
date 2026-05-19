@@ -5,8 +5,9 @@ from pathlib import Path
 import requests as req_lib
 
 import jellyfin
+import settings
 import torbox as torbox_mod
-from config import CATBOX_MODE, MEDIA_PATH, TORBOX_API_KEY, TORBOX_BASE_URL
+from config import MEDIA_PATH, TORBOX_API_KEY, TORBOX_BASE_URL
 
 log = logging.getLogger(__name__)
 
@@ -137,7 +138,7 @@ def _resolve_url(item: dict, file_id: int, file_name: str, info: dict, media_typ
     Otherwise it is the direct TorBox CDN URL.
     """
     torrent_id = item.get("id")
-    if CATBOX_MODE:
+    if settings.get("CATBOX_MODE", False):
         import catbox
         magnet = item.get("magnet") or f"magnet:?xt=urn:btih:{item.get('hash')}"
         title = f"{info.get('title','')} ({info['year']})" if info.get("year") else info.get("title", file_name)

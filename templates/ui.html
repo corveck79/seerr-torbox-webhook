@@ -223,6 +223,7 @@
     <button class="tab-btn" data-tab="overrides">Overrides</button>
     <button class="tab-btn" data-tab="blacklist">Blacklist</button>
     <button class="tab-btn" data-tab="repair">Repair</button>
+    <button class="tab-btn" data-tab="settings">Settings</button>
     <button class="tab-btn" data-tab="logs">Logs</button>
   </div>
 
@@ -662,6 +663,21 @@
     </div>
   </div>
 
+  <!-- ── Settings ── -->
+  <div id="tab-settings" class="tab-pane">
+    <div class="section-hdr">
+      <span class="section-title">Runtime Settings</span>
+      <span class="dim" style="font-size:11px">⚡ = hot-reload (no restart) · ⚠ = restart required · ✱ = currently overrides .env</span>
+    </div>
+    <form method="post" action="/ui/settings" id="settings-form">
+      <div id="settings-groups"><div class="dim" style="font-size:12px">Loading…</div></div>
+      <div style="margin-top:16px;display:flex;gap:8px;align-items:center">
+        <button type="submit" class="btn btn-primary">💾 Save all</button>
+        <span class="dim" style="font-size:12px">Empty a field to clear the override and fall back to the .env value.</span>
+      </div>
+    </form>
+  </div>
+
   <!-- ── Logs ── -->
   <div id="tab-logs" class="tab-pane">
     <div class="log-controls">
@@ -707,6 +723,7 @@
     if (name === 'catbox') refreshCatbox();
     if (name === 'blacklist') refreshBlacklist();
     if (name === 'overrides') refreshOverrides();
+    if (name === 'settings') refreshSettings();
   }
   document.querySelectorAll('.tab-btn').forEach(btn => {
     btn.addEventListener('click', () => showTab(btn.dataset.tab));
@@ -921,6 +938,61 @@
           </div>`).join('');
       }
     } catch(e) {}
+  }
+
+  // ── Settings ──
+  function _formatVal(v, kind) {
+    if (v === null || v === undefined) return '';
+    if (Array.isArray(v)) return v.join(',');
+    if (kind === 'bool') return v ? 'true' : 'false';
+    return String(v);
+  }
+  async function refreshSettings() {
+    const root = document.getElementById('settings-groups');
+    root.innerHTML = '<div class="dim" style="font-size:12px">Loading…</div>';
+    try {
+      const r = await fetch('/ui/api/settings');
+      const d = await r.json();
+      root.innerHTML = '';
+      d.groups.forEach(g => {
+        const card = document.createElement('div');
+        card.className = 'card';
+        card.style.marginBottom = '12px';
+        let body = `<div class="card-title">${g.title}</div>
+          <table style="width:100%;font-size:12px">`;
+        g.items.forEach(it => {
+          const val = _formatVal(it.value, it.kind);
+          const badges = `${it.hot_reload ? '<span title="hot reload">⚡</span>' : '<span title="restart required" style="color:var(--amber)">⚠</span>'}
+            ${it.overridden ? '<span title="override active" style="color:var(--accent)">✱</span>' : ''}`;
+          let input;
+          if (it.kind === 'bool') {
+            const checked = it.value ? 'checked' : '';
+            input = `<input type="hidden" name="setting_${it.key}" value="false">
+                     <label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer">
+                       <input type="checkbox" name="setting_${it.key}" value="true" ${checked}>
+                       <span class="dim">enabled</span>
+                     </label>`;
+          } else if (it.kind === 'int') {
+            input = `<input type="number" name="setting_${it.key}" value="${val}" style="width:140px">`;
+          } else if (it.kind === 'list') {
+            input = `<input type="text" name="setting_${it.key}" value="${val}" placeholder="comma,separated" style="width:280px">`;
+          } else {
+            const isSecret = /KEY|TOKEN|SECRET|PASSWORD/.test(it.key);
+            const type = isSecret ? 'password' : 'text';
+            input = `<input type="${type}" name="setting_${it.key}" value="${val}" style="width:340px">`;
+          }
+          body += `<tr style="border-bottom:1px solid var(--panel2)">
+            <td style="padding:8px 8px 8px 0;width:280px"><code style="font-size:11px">${it.key}</code> ${badges}</td>
+            <td style="padding:8px 0">${input}</td>
+          </tr>`;
+        });
+        body += '</table>';
+        card.innerHTML = body;
+        root.appendChild(card);
+      });
+    } catch(e) {
+      root.innerHTML = `<div style="color:var(--red);font-size:12px">${e.message}</div>`;
+    }
   }
 
   // ── Integration URLs ──
@@ -1146,7 +1218,7 @@
   document.addEventListener('keydown', (e) => {
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
     const map = { '1':'overview','2':'requests','3':'movies','4':'series','5':'wanted',
-                  '6':'search','7':'torbox','8':'catbox','9':'blacklist','0':'logs' };
+                  '6':'search','7':'torbox','8':'catbox','9':'settings','0':'logs' };
     if (map[e.key]) { showTab(map[e.key]); e.preventDefault(); }
   });
 

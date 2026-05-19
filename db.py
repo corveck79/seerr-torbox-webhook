@@ -139,6 +139,12 @@ CREATE TABLE IF NOT EXISTS metric_events (
     created_at    TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%S', 'now'))
 );
 
+CREATE TABLE IF NOT EXISTS settings (
+    key         TEXT    PRIMARY KEY,
+    value       TEXT,
+    updated_at  TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%S', 'now'))
+);
+
 CREATE TABLE IF NOT EXISTS repair_items (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
     cleanup_run_id  INTEGER NOT NULL REFERENCES cleanup_runs(id),
@@ -679,6 +685,35 @@ def get_metric_summary(metric: str, days: int = 30) -> list[dict]:
             (metric,),
         ).fetchall()
         return [dict(r) for r in rows]
+
+
+# ── settings (runtime overrides for .env) ─────────────────────────────────────
+
+def get_setting(key: str) -> str | None:
+    with _connect() as conn:
+        row = conn.execute("SELECT value FROM settings WHERE key=?", (key,)).fetchone()
+        return row["value"] if row else None
+
+
+def set_setting(key: str, value: str | None) -> None:
+    with _connect() as conn:
+        if value is None:
+            conn.execute("DELETE FROM settings WHERE key=?", (key,))
+        else:
+            conn.execute(
+                """INSERT INTO settings (key, value) VALUES (?, ?)
+                   ON CONFLICT(key) DO UPDATE SET
+                     value=excluded.value,
+                     updated_at=strftime('%Y-%m-%d %H:%M:%S','now')""",
+                (key, value),
+            )
+        conn.commit()
+
+
+def get_all_settings() -> dict[str, str]:
+    with _connect() as conn:
+        rows = conn.execute("SELECT key, value FROM settings").fetchall()
+        return {r["key"]: r["value"] for r in rows}
 
 
 def get_repair_items(limit: int = 200) -> list[dict]:

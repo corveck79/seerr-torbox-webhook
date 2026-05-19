@@ -565,6 +565,43 @@ def ui_continue_watching():
     return redirect(url_for("ui_dashboard") + "#overview")
 
 
+@app.get("/ui/api/settings")
+def ui_api_settings():
+    import settings
+    return jsonify(groups=settings.all_for_ui(), hot_reload=list(settings.HOT_RELOAD))
+
+
+@app.post("/ui/settings")
+def ui_save_settings():
+    import settings
+    saved = 0
+    for raw_key, raw_value in request.form.items():
+        if not raw_key.startswith("setting_"):
+            continue
+        key = raw_key[8:]
+        # Checkbox semantics: only the box's value if checked; we emit hidden "false"
+        # before each checkbox so the value always arrives. Handle multi-value here.
+        values = request.form.getlist(raw_key)
+        value = values[-1] if values else raw_value
+        if key in settings._BOOL_KEYS:
+            settings.set(key, str(value).lower() in ("1", "true", "yes", "on"))
+        elif value == "":
+            settings.set(key, None)
+        else:
+            settings.set(key, value)
+        saved += 1
+    flash(f"Saved {saved} setting(s). Hot-reload settings apply immediately; others need a restart.", "ok")
+    return redirect(url_for("ui_dashboard") + "#settings")
+
+
+@app.post("/ui/settings-reset/<key>")
+def ui_settings_reset(key: str):
+    import settings
+    settings.set(key, None)
+    flash(f"Reset {key} to .env default", "ok")
+    return redirect(url_for("ui_dashboard") + "#settings")
+
+
 @app.post("/ui/quota-check")
 def ui_quota_check():
     threading.Thread(
