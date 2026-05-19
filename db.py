@@ -471,6 +471,28 @@ def get_media_items(media_type: str | None = None) -> list[dict]:
         return [dict(r) for r in rows]
 
 
+def get_unknown_media_items() -> list[dict]:
+    with _connect() as conn:
+        rows = conn.execute(
+            "SELECT * FROM media_items WHERE imdb_id LIKE 'unknown_%'"
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+
+def rekey_media_item(old_id: str, new_id: str, media_type: str) -> bool:
+    with _connect() as conn:
+        try:
+            cur = conn.execute(
+                "UPDATE media_items SET imdb_id=? WHERE imdb_id=? AND media_type=?",
+                (new_id, old_id, media_type),
+            )
+            conn.commit()
+            return cur.rowcount > 0
+        except Exception:
+            conn.rollback()
+            return False
+
+
 # ── cleanup_runs ──────────────────────────────────────────────────────────────
 
 def insert_cleanup_run() -> int:

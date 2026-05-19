@@ -31,6 +31,7 @@ def run() -> dict:
     # 4. Library import (DB self-heal from disk)
     try:
         result["import"] = library_sync.import_existing()
+        result["resolve_unknowns"] = library_sync.resolve_unknowns()
     except Exception as exc:
         log.exception("Recovery: import failed")
         result["import"] = f"failed: {exc}"

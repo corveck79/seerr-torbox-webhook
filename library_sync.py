@@ -6,9 +6,11 @@ corresponding media_items entry, so DB-loss recoveries can be self-healing.
 """
 import logging
 import re
+import time
 from pathlib import Path
 
 import db
+import tmdb
 from config import MEDIA_PATH
 
 log = logging.getLogger(__name__)
@@ -89,3 +91,32 @@ def import_existing() -> dict:
     log.info("Library import: scanned %d strm files, imported %d new items",
              len(files), imported)
     return {"scanned": len(files), "imported": imported}
+
+
+def resolve_unknowns() -> dict:
+    """Resolve unknown_ placeholder IDs to real IMDb IDs via TMDB."""
+    items = db.get_unknown_media_items()
+    if not items:
+        return {"resolved": 0, "failed": 0}
+    resolved = 0
+    failed = 0
+    for item in items:
+        old_id = item["imdb_id"]
+        title_full = item["title"]
+        media_type = item["media_type"]
+        year_m = _FOLDER_YEAR_RE.search(title_full)
+        year = int(year_m.group(1)) if year_m else None
+        title = _FOLDER_YEAR_RE.sub("", title_full).strip()
+        try:
+            real_id = tmdb.search_movie(title, year) if media_type == "movie" else tmdb.search_tv(title)
+        except Exception as exc:
+            log.debug("TMDB lookup failed for %r: %s", title_full, exc)
+            real_id = None
+        if real_id and db.rekey_media_item(old_id, real_id, media_type):
+            log.info("Resolved %s -> %s (%s)", old_id, real_id, title_full)
+            resolved += 1
+        else:
+            failed += 1
+        time.sleep(0.25)
+    log.info("resolve_unknowns: %d resolved, %d unresolved", resolved, failed)
+    return {"resolved": resolved, "failed": failed}

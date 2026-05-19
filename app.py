@@ -304,6 +304,7 @@ def _delayed(seconds: float, target, name: str) -> None:
 
 _delayed(15.0, monitor.sync_movies, "movie-sync-init")
 _delayed(30.0, strm_generator.run_and_refresh, "strm-init")
+_delayed(60.0, library_sync.resolve_unknowns, "resolve-unknowns-init")
 
 
 # ── Auth ──────────────────────────────────────────────────────────────────────
@@ -876,9 +877,14 @@ def ui_api_orphans():
     return jsonify(library_sync.orphans())
 
 
+def _library_import_and_resolve():
+    library_sync.import_existing()
+    library_sync.resolve_unknowns()
+
+
 @app.post("/ui/library-import")
 def ui_library_import():
-    threading.Thread(target=library_sync.import_existing,
+    threading.Thread(target=_library_import_and_resolve,
                      name="lib-import", daemon=True).start()
     flash("Library import started — check Logs for progress", "ok")
     return redirect(url_for("ui_dashboard") + "#overview")
