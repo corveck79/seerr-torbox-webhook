@@ -9,10 +9,10 @@ import time
 
 import requests
 
+import settings as _settings
 from config import (
     HEALTH_CACHE_SECONDS,
     TORRENTIO_BASE_URL,
-    ZILEAN_ENABLED,
     ZILEAN_URL,
 )
 
@@ -39,7 +39,7 @@ def _probe(name: str) -> bool:
 
 
 def is_up(name: str) -> bool:
-    if name == "zilean" and (not ZILEAN_ENABLED or not ZILEAN_URL):
+    if name == "zilean" and (not _settings.get("ZILEAN_ENABLED", False) or not ZILEAN_URL):
         return False
     now = time.monotonic()
     with _lock:

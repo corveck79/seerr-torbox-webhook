@@ -11,7 +11,8 @@ import tmdb
 import torbox
 import torrentio
 import zilean
-from config import MEDIA_PATH, MAX_RETRY_ATTEMPTS, ZILEAN_ENABLED
+import settings as _settings
+from config import MEDIA_PATH, MAX_RETRY_ATTEMPTS
 
 log = logging.getLogger(__name__)
 
@@ -141,7 +142,7 @@ def _retry_episode(ep: dict) -> None:
     db.increment_episode_attempt(ep["id"])
 
     streams: list = []
-    if ZILEAN_ENABLED:
+    if _settings.get("ZILEAN_ENABLED", False):
         streams = zilean.fetch_streams(imdb_id, season=season, episode=episode)
     if not streams:
         streams = torrentio.fetch_streams("series", imdb_id, season=season, episode=episode)
@@ -179,7 +180,7 @@ def search_episode_now(imdb_id: str, title: str, season: int, episode: int) -> b
 def _search_and_add_season(imdb_id: str, title: str, seasons: list[int]) -> None:
     for season in seasons:
         streams: list = []
-        if ZILEAN_ENABLED:
+        if _settings.get("ZILEAN_ENABLED", False):
             streams = zilean.fetch_streams(imdb_id, season=season, episode=1)
         if not streams:
             streams = torrentio.fetch_streams("series", imdb_id, season=season, episode=1)

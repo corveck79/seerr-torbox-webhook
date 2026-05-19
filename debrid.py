@@ -12,8 +12,8 @@ that's added.
 """
 import logging
 
+import settings as _settings
 import torbox
-from config import MULTI_DEBRID_ENABLED
 
 log = logging.getLogger(__name__)
 
@@ -24,7 +24,7 @@ def check_cached_multi(hashes: list[str]) -> dict[str, set[str]]:
     if not hashes:
         return out
     out["torbox"] = torbox.check_cached(hashes)
-    if MULTI_DEBRID_ENABLED:
+    if _settings.get("MULTI_DEBRID_ENABLED", False):
         try:
             import realdebrid
             if realdebrid.is_configured():

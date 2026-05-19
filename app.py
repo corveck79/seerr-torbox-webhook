@@ -275,8 +275,9 @@ def _start_scheduler() -> BackgroundScheduler:
                  "catbox_gc", "merge_versions", "quota_warn"):
         try:
             scheduler.modify_job(jid, max_instances=1)
-        except Exception:
-            pass
+        except Exception as exc:
+            # Job may not exist if a feature is disabled — that's expected.
+            log.debug("modify_job(%s): %s", jid, exc)
 
     scheduler.start()
     return scheduler

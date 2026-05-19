@@ -13,7 +13,7 @@ import strm_generator
 import torbox
 import torrentio
 import zilean
-from config import ZILEAN_ENABLED
+import settings as _settings
 from torrentio import TorrentioStream
 from webhook_parser import MediaRequest
 
@@ -26,7 +26,7 @@ def _rank(streams, prefer_season_pack: bool = False, override: dict | None = Non
 
 def _fetch_movie_candidates(req: MediaRequest) -> list:
     override = db.get_show_override(req.imdb_id)
-    if ZILEAN_ENABLED and health_cache.is_up("zilean"):
+    if _settings.get("ZILEAN_ENABLED", False) and health_cache.is_up("zilean"):
         streams = zilean.fetch_streams(req.imdb_id)
         candidates = _rank(streams, override=override)
         if candidates:
@@ -42,7 +42,7 @@ def _fetch_movie_candidates(req: MediaRequest) -> list:
 
 def _fetch_season_candidates(req: MediaRequest, season: int, episode: int, prefer_season_pack: bool = False) -> list:
     override = db.get_show_override(req.imdb_id)
-    if ZILEAN_ENABLED and health_cache.is_up("zilean"):
+    if _settings.get("ZILEAN_ENABLED", False) and health_cache.is_up("zilean"):
         streams = zilean.fetch_streams(req.imdb_id, season=season, episode=episode)
         candidates = _rank(streams, prefer_season_pack=prefer_season_pack, override=override)
         if candidates:
@@ -143,10 +143,10 @@ def _try_realdebrid_fallback(title: str, candidates: list,
     """
     try:
         import realdebrid
-        from config import MULTI_DEBRID_ENABLED
-    except Exception:
+    except ImportError as exc:
+        log.debug("RD fallback: realdebrid module not importable: %s", exc)
         return None
-    if not MULTI_DEBRID_ENABLED or not realdebrid.is_configured():
+    if not _settings.get("MULTI_DEBRID_ENABLED", False) or not realdebrid.is_configured():
         return None
     candidates = blacklist.filter_candidates(candidates)
     rd_cached = realdebrid.check_cached([c.info_hash for c in candidates[:20]])
@@ -244,7 +244,17 @@ def _process_season(req: MediaRequest, season: int) -> tuple[bool, Optional[Torr
 def process(req: MediaRequest, _retry_attempt: int = 0) -> bool:
     with locks.imdb_mutex(req.imdb_id, blocking=False) as got:
         if not got:
-            log.info("Skip: %s already in flight elsewhere", req.imdb_id)
+            # Another worker is already processing this imdb. Re-queue ourselves
+            # for 60 seconds so we don't lose a webhook-triggered request that
+            # collided with a retry-queue trigger (and vice versa).
+            log.info("Skip: %s already in flight; re-queueing in 60s", req.imdb_id)
+            try:
+                db.enqueue_retry(
+                    req.imdb_id, req.title, req.media_type, req.seasons,
+                    _retry_attempt, delay_seconds=60,
+                )
+            except Exception:
+                log.exception("Could not re-enqueue %s after mutex miss", req.imdb_id)
             return False
         return _process_locked(req, _retry_attempt)
 
@@ -309,8 +319,8 @@ def _process_locked(req: MediaRequest, _retry_attempt: int) -> bool:
             import metrics_prom
             metrics_prom.requests_total.labels(media_type=req.media_type, status="success").inc()
             metrics_prom.request_duration_seconds.labels(media_type=req.media_type).observe(elapsed)
-        except Exception:
-            pass
+        except Exception as exc:
+            log.debug("metrics_prom (success) failed: %s", exc)
         if winner:
             db.record_metric("quality_added", winner.quality, value_int=1)
             source = (winner.name.split()[0] if winner.name else "?").lower()
@@ -319,8 +329,8 @@ def _process_locked(req: MediaRequest, _retry_attempt: int) -> bool:
                 import metrics_prom
                 metrics_prom.quality_added_total.labels(quality=winner.quality or "unknown").inc()
                 metrics_prom.source_wins_total.labels(source=source).inc()
-            except Exception:
-                pass
+            except Exception as exc:
+                log.debug("metrics_prom (quality) failed: %s", exc)
     else:
         db.update_request(row_id, "failed")
         log.warning("No content added; skipping Jellyfin refresh for %s", req.title)
@@ -330,8 +340,8 @@ def _process_locked(req: MediaRequest, _retry_attempt: int) -> bool:
         try:
             import metrics_prom
             metrics_prom.requests_total.labels(media_type=req.media_type, status="failed").inc()
-        except Exception:
-            pass
+        except Exception as exc:
+            log.debug("metrics_prom (failed) skipped: %s", exc)
         import retry_queue
         retry_queue.schedule(req, _retry_attempt)
 

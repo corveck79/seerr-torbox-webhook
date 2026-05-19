@@ -10,7 +10,8 @@ import tmdb
 import torbox
 import torrentio
 import zilean
-from config import MEDIA_PATH, ZILEAN_ENABLED
+import settings as _settings
+from config import MEDIA_PATH
 from torrentio import TorrentioStream
 
 log = logging.getLogger(__name__)
@@ -80,7 +81,7 @@ def _resolve_imdb(title: str, year: int | None, media_type: str) -> str | None:
 
 def _fetch_candidates(imdb_id: str, title: str, media_type: str) -> list:
     if media_type == "movie":
-        if ZILEAN_ENABLED:
+        if _settings.get("ZILEAN_ENABLED", False):
             streams = zilean.fetch_streams(imdb_id)
             candidates = torrentio.rank_streams(streams)
             if candidates:
@@ -88,7 +89,7 @@ def _fetch_candidates(imdb_id: str, title: str, media_type: str) -> list:
         streams = torrentio.fetch_streams("movie", imdb_id)
         return torrentio.rank_streams(streams)
     else:
-        if ZILEAN_ENABLED:
+        if _settings.get("ZILEAN_ENABLED", False):
             streams = zilean.fetch_streams(imdb_id, season=1, episode=1)
             candidates = torrentio.rank_streams(streams, prefer_season_pack=True)
             if candidates:

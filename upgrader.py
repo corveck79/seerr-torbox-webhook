@@ -12,16 +12,12 @@ from pathlib import Path
 
 import db
 import jellyfin
+import settings as _settings
 import strm_generator
 import torbox
 import torrentio
 import zilean
-from config import (
-    AUTO_UPGRADE_ENABLED,
-    MEDIA_PATH,
-    SEASON_PACK_CONSOLIDATION_ENABLED,
-    ZILEAN_ENABLED,
-)
+from config import MEDIA_PATH
 from webhook_parser import MediaRequest
 
 log = logging.getLogger(__name__)
@@ -35,7 +31,7 @@ def _quality_score(q: str | None) -> int:
 
 
 def _fetch_movie_candidates(imdb_id: str) -> list:
-    if ZILEAN_ENABLED:
+    if _settings.get("ZILEAN_ENABLED", False):
         streams = zilean.fetch_streams(imdb_id)
         candidates = torrentio.rank_streams(streams)
         if candidates:
@@ -45,7 +41,7 @@ def _fetch_movie_candidates(imdb_id: str) -> list:
 
 
 def _fetch_season_candidates(imdb_id: str, season: int) -> list:
-    if ZILEAN_ENABLED:
+    if _settings.get("ZILEAN_ENABLED", False):
         streams = zilean.fetch_streams(imdb_id, season=season, episode=1)
         candidates = torrentio.rank_streams(streams, prefer_season_pack=True)
         if candidates:
@@ -72,7 +68,7 @@ def _better_cached(candidates: list, current_quality: str, current_hash: str) ->
 
 def run_auto_upgrade() -> int:
     """Scan recent successful requests for better cached releases."""
-    if not AUTO_UPGRADE_ENABLED:
+    if not _settings.get("AUTO_UPGRADE_ENABLED", True):
         return 0
     log.info("Auto-upgrade: scanning")
     upgraded = 0
@@ -130,7 +126,7 @@ def _group_episode_strms_by_season() -> dict[tuple[str, int], list[Path]]:
 
 def run_pack_consolidation() -> int:
     """For each series-season with >=3 per-episode strms, try to swap in a cached pack."""
-    if not SEASON_PACK_CONSOLIDATION_ENABLED:
+    if not _settings.get("SEASON_PACK_CONSOLIDATION_ENABLED", True):
         return 0
     log.info("Season-pack consolidation: scanning")
     groups = _group_episode_strms_by_season()
