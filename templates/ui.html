@@ -24,20 +24,30 @@
       --indigo: #a5b4fc; --indigo-bg: #1e1b4b;
     }
     [data-theme="light"] {
-      --bg: #f8fafc;
+      --bg: #f4f6fa;
       --panel: #ffffff;
       --panel2: #f1f5f9;
       --border: #e2e8f0;
-      --text: #334155;
+      --text: #475569;
       --text-bright: #0f172a;
       --muted: #64748b;
       --dim: #94a3b8;
-      --accent: #4f46e5;
-      --green-bg: #dcfce7;
-      --red-bg: #fee2e2;
-      --amber-bg: #fef3c7;
-      --indigo-bg: #e0e7ff;
+      --accent: #0d9488;
+      --accent-bg: #0d9488;
+      --accent-hover: #0f766e;
+      --green: #15803d; --green-bg: #dcfce7; --green-border: #86efac;
+      --red: #b91c1c;   --red-bg: #fee2e2;   --red-border: #fca5a5;
+      --amber: #b45309; --amber-bg: #fef3c7;
+      --indigo: #4338ca; --indigo-bg: #e0e7ff;
     }
+    [data-theme="light"] body { background:
+      radial-gradient(at top left, #ecfeff, transparent 50%),
+      radial-gradient(at bottom right, #f0fdfa, transparent 50%),
+      var(--bg); }
+    [data-theme="light"] .card,
+    [data-theme="light"] .table-wrap { box-shadow: 0 1px 3px rgba(15,23,42,.04); }
+    [data-theme="light"] #log-box { background: #0f172a; color: #67e8f9; }
+    [data-theme="light"] .toast { box-shadow: 0 4px 16px rgba(15,23,42,.12); }
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
     a { color: var(--accent); text-decoration: none; }
@@ -702,7 +712,10 @@
   <div id="tab-settings" class="tab-pane">
     <div class="section-hdr">
       <span class="section-title">Runtime Settings</span>
-      <span class="dim" style="font-size:11px">⚡ = hot-reload (no restart) · ⚠ = restart required · ✱ = currently overrides .env</span>
+      <div style="display:flex;gap:10px;align-items:center">
+        <a href="/setup" class="btn btn-secondary btn-sm" style="text-decoration:none">🧙 Re-run wizard</a>
+        <span class="dim" style="font-size:11px">⚡ = hot-reload (no restart) · ⚠ = restart required · ✱ = currently overrides .env</span>
+      </div>
     </div>
     <form method="post" action="/ui/settings" id="settings-form">
       <div id="settings-groups"><div class="dim" style="font-size:12px">Loading…</div></div>

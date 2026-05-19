@@ -4,7 +4,6 @@ import time
 import requests
 
 from config import (
-    TORBOX_API_KEY,
     TORBOX_BASE_URL,
     TORBOX_POLL_INTERVAL_SEC,
     TORBOX_POLL_TIMEOUT_SEC,
@@ -14,7 +13,8 @@ log = logging.getLogger(__name__)
 
 
 def _headers() -> dict[str, str]:
-    return {"Authorization": f"Bearer {TORBOX_API_KEY}"}
+    import settings
+    return {"Authorization": f"Bearer {settings.get('TORBOX_API_KEY', '')}"}
 
 
 def add_magnet(magnet: str, timeout: int = 30) -> dict:

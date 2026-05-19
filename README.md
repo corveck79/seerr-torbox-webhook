@@ -154,25 +154,23 @@ That's it. Out of the box Mycelium uses [Torrentio](https://torrentio.strem.fun)
 ```bash
 git clone https://github.com/corveck79/mycelium.git
 cd mycelium
-cp .env.example .env
-
-# minimum: set TORBOX_API_KEY (and paths if you're not on default NAS layout)
-$EDITOR .env
-
 docker compose up -d --build
 ```
 
+That's it. Open **`http://<your-nas>:8088/ui`** and the setup wizard walks you through:
+
+1. TorBox API key (the one required thing).
+2. Jellyfin URL and API key.
+3. Seerr URL and API key, plus TMDB token for posters.
+4. Quality and audio language preferences.
+5. Optional Catbox lazy mode.
+6. Optional Discord/Telegram notifications.
+
+Each connection step has a **Test** button so you find typos before you save. All values land in the runtime settings DB; you can re-run the wizard or edit individual settings via the Settings tab anytime.
+
 Then in Seerr: **Settings → Notifications → Webhook** → `http://<your-nas>:8088/webhook`.
 
-Open the dashboard at **`http://<your-nas>:8088/ui`**.
-
-### First-run checklist
-
-1. Dashboard → **Settings** → toggle `CATBOX_MODE` if you want lazy materialization.
-2. Set `AUDIO_LANGUAGE_PREFERENCE` (e.g. `nl,en`).
-3. Add a Discord webhook or Telegram bot for notifications.
-4. Overview → **🚑 Recovery wizard** to baseline the library.
-5. Done. Request a movie in Seerr and watch it appear.
+Prefer the old-school `.env` workflow? Copy `.env.example` to `.env`, fill it in, click **Skip wizard** on first visit.
 
 ---
 
@@ -364,8 +362,8 @@ If the DB itself is corrupted: Overview → **🚑 Recovery wizard** rebuilds th
 - [x] ~~Plex compatibility via WebDAV~~. Mount via davfs2 on DSM host.
 - [x] ~~Prometheus metrics export~~. Exposed at `/metrics`.
 - [ ] Per-episode RealDebrid fallback (not just season packs).
-- [ ] Web-based one-click installer.
-- [ ] Light official theme.
+- [x] ~~Web-based one-click installer~~. Visit `/ui` on first run.
+- [x] ~~Light official theme~~. Toggle from the topbar icon.
 
 ---
 

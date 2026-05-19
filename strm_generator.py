@@ -7,7 +7,7 @@ import requests as req_lib
 import jellyfin
 import settings
 import torbox as torbox_mod
-from config import MEDIA_PATH, TORBOX_API_KEY, TORBOX_BASE_URL
+from config import MEDIA_PATH, TORBOX_BASE_URL
 
 log = logging.getLogger(__name__)
 
@@ -103,7 +103,7 @@ def _strm_path(info: dict) -> Path:
 def _get_stream_url(torrent_id: int, file_id: int) -> str | None:
     url = f"{TORBOX_BASE_URL.rstrip('/')}/torrents/requestdl"
     params = {
-        "token": TORBOX_API_KEY,
+        "token": settings.get("TORBOX_API_KEY", ""),
         "torrent_id": torrent_id,
         "file_id": file_id,
         "zip_link": "false",

@@ -19,7 +19,7 @@ def _env_int(name: str, default: int) -> int:
         raise RuntimeError(f"Environment variable {name} must be an integer, got {raw!r}") from exc
 
 
-TORBOX_API_KEY = _env("TORBOX_API_KEY", required=True)
+TORBOX_API_KEY = _env("TORBOX_API_KEY", "")
 TORBOX_BASE_URL = _env("TORBOX_BASE_URL", "https://api.torbox.app/v1/api")
 
 ZILEAN_URL = _env("ZILEAN_URL", "")

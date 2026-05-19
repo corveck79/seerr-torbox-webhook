@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>myc3l1um setup</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Cg stroke='%2322d3ee' stroke-width='1.5' opacity='0.7'%3E%3Cline x1='10' y1='20' x2='30' y2='10'/%3E%3Cline x1='10' y1='20' x2='30' y2='30'/%3E%3Cline x1='30' y1='10' x2='30' y2='30'/%3E%3Cline x1='20' y1='5' x2='10' y2='20'/%3E%3Cline x1='20' y1='35' x2='10' y2='20'/%3E%3C/g%3E%3Ccircle cx='10' cy='20' r='3.5' fill='%230d9488'/%3E%3Ccircle cx='30' cy='10' r='3' fill='%2322d3ee'/%3E%3Ccircle cx='30' cy='30' r='3' fill='%2322d3ee'/%3E%3Ccircle cx='20' cy='5' r='2.2' fill='%235eead4'/%3E%3Ccircle cx='20' cy='35' r='2.2' fill='%235eead4'/%3E%3C/svg%3E">
+  <style>
+    :root {
+      --bg: #0f1117; --panel: #161d2e; --panel2: #1a2236;
+      --border: #1e2535; --text: #cbd5e1; --text-bright: #e2e8f0;
+      --muted: #64748b; --dim: #475569;
+      --accent: #22d3ee; --accent-bg: #0d9488; --accent-hover: #0f766e;
+      --green: #4ade80; --red: #f87171; --amber: #fbbf24;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg);
+           color: var(--text); min-height: 100vh; display: flex; align-items: center;
+           justify-content: center; padding: 24px; }
+    .wizard { background: var(--panel); border: 1px solid var(--border);
+              border-radius: 12px; width: 100%; max-width: 640px;
+              box-shadow: 0 20px 60px rgba(0,0,0,.4); overflow: hidden; }
+    .head { padding: 24px 28px 18px; border-bottom: 1px solid var(--border); }
+    .head h1 { font-family: 'JetBrains Mono','Menlo',monospace; font-size: 20px;
+               font-weight: 700; color: var(--text-bright); display: flex;
+               align-items: center; gap: 10px; }
+    .head h1 span.h { color: var(--accent); }
+    .head p { color: var(--muted); font-size: 12px; margin-top: 4px; }
+    .progress { display: flex; gap: 4px; margin-top: 14px; }
+    .progress div { flex: 1; height: 4px; border-radius: 2px; background: var(--panel2); }
+    .progress div.done { background: var(--accent); }
+    .progress div.active { background: var(--accent); opacity: 0.5; }
+
+    .body { padding: 24px 28px; min-height: 280px; }
+    .step { display: none; }
+    .step.active { display: block; }
+    .step h2 { font-size: 18px; font-weight: 700; color: var(--text-bright); margin-bottom: 6px; }
+    .step .lede { font-size: 13px; color: var(--muted); margin-bottom: 20px; line-height: 1.5; }
+
+    .field { margin-bottom: 14px; }
+    .field label { display: block; font-size: 11px; color: var(--muted);
+                   font-weight: 700; text-transform: uppercase;
+                   letter-spacing: .06em; margin-bottom: 4px; }
+    .field .hint { display: block; font-size: 11px; color: var(--dim); margin-top: 4px; }
+    input, select, textarea {
+      width: 100%; background: var(--panel2); border: 1px solid var(--border);
+      color: var(--text-bright); padding: 9px 12px; border-radius: 6px;
+      font-size: 13px; outline: none; font-family: inherit;
+    }
+    input:focus, select:focus { border-color: var(--accent); }
+    .check-row { display: flex; align-items: center; gap: 10px; cursor: pointer; padding: 8px; border-radius: 6px; }
+    .check-row:hover { background: var(--panel2); }
+    .check-row input { width: auto; }
+    .check-row span.t { color: var(--text-bright); font-size: 13px; }
+    .check-row span.d { color: var(--muted); font-size: 11px; }
+
+    .test-btn { background: var(--panel2); border: 1px solid var(--border);
+                color: var(--accent); padding: 6px 12px; border-radius: 4px;
+                font-size: 11px; font-weight: 600; cursor: pointer; margin-top: 6px; }
+    .test-btn:hover { background: var(--border); }
+    .test-result { display: inline-block; margin-left: 10px; font-size: 12px; }
+    .test-result.ok { color: var(--green); }
+    .test-result.err { color: var(--red); }
+    .test-result.pending { color: var(--amber); }
+
+    .foot { padding: 18px 28px; background: var(--panel2); display: flex;
+            justify-content: space-between; align-items: center;
+            border-top: 1px solid var(--border); }
+    .btn { border: none; padding: 9px 18px; border-radius: 6px; font-size: 13px;
+           font-weight: 600; cursor: pointer; }
+    .btn-primary { background: var(--accent-bg); color: white; }
+    .btn-primary:hover { background: var(--accent-hover); }
+    .btn-primary:disabled { background: var(--dim); cursor: not-allowed; }
+    .btn-ghost { background: none; color: var(--muted); }
+    .btn-ghost:hover { color: var(--text-bright); }
+    .step-actions { display: flex; gap: 10px; }
+
+    .alert { padding: 10px 14px; border-radius: 6px; font-size: 13px;
+             margin-bottom: 16px; border-left: 3px solid; }
+    .alert-info { background: rgba(34, 211, 238, 0.08); color: var(--accent); border-color: var(--accent); }
+    .alert-warn { background: rgba(251, 191, 36, 0.08); color: var(--amber); border-color: var(--amber); }
+    .alert-ok { background: rgba(74, 222, 128, 0.08); color: var(--green); border-color: var(--green); }
+
+    code { font-family: 'JetBrains Mono','Menlo',monospace; background: var(--panel2);
+           padding: 1px 6px; border-radius: 3px; font-size: 12px; color: var(--accent); }
+  </style>
+</head>
+<body>
+
+<div class="wizard">
+  <div class="head">
+    <h1>
+      <svg width="26" height="26" viewBox="0 0 40 40">
+        <g stroke="#22d3ee" stroke-width="1.5" opacity="0.7">
+          <line x1="10" y1="20" x2="30" y2="10"/><line x1="10" y1="20" x2="30" y2="30"/>
+          <line x1="30" y1="10" x2="30" y2="30"/><line x1="20" y1="5" x2="10" y2="20"/>
+          <line x1="20" y1="35" x2="10" y2="20"/>
+        </g>
+        <circle cx="10" cy="20" r="3.5" fill="#0d9488"/>
+        <circle cx="30" cy="10" r="3" fill="#22d3ee"/>
+        <circle cx="30" cy="30" r="3" fill="#22d3ee"/>
+        <circle cx="20" cy="5" r="2.2" fill="#5eead4"/>
+        <circle cx="20" cy="35" r="2.2" fill="#5eead4"/>
+      </svg>
+      myc<span class="h">3</span>l<span class="h">1</span>um setup
+    </h1>
+    <p>One-time wizard to wire up the basics. You can change everything later in the Settings tab.</p>
+    <div class="progress" id="progress"></div>
+  </div>
+
+  <div class="body">
+    <!-- Step 0: welcome -->
+    <div class="step active" data-step="0">
+      <h2>Welcome.</h2>
+      <p class="lede">Mycelium will turn your Seerr requests into Jellyfin-ready streams via TorBox in about 30 seconds. This wizard takes a few minutes; everything is hot-reloadable so nothing is final until you click Finish on the last step.</p>
+      <div class="alert alert-info">If you'd rather edit <code>.env</code> directly, click <b>Skip wizard</b> at the bottom and head to the dashboard.</div>
+    </div>
+
+    <!-- Step 1: TorBox -->
+    <div class="step" data-step="1">
+      <h2>TorBox</h2>
+      <p class="lede">Your TorBox API key. Find it at <code>torbox.app → Settings → API Keys</code>. Without this Mycelium can't do anything.</p>
+      <div class="field">
+        <label>TorBox API key <span style="color:var(--red)">*</span></label>
+        <input type="password" id="TORBOX_API_KEY" placeholder="your-torbox-api-key" required>
+        <button type="button" class="test-btn" onclick="testConn('torbox')">Test connection</button>
+        <span id="r-torbox" class="test-result"></span>
+      </div>
+    </div>
+
+    <!-- Step 2: Jellyfin -->
+    <div class="step" data-step="2">
+      <h2>Jellyfin</h2>
+      <p class="lede">Optional but recommended. Mycelium triggers library scans after adding new content. Get the API key from <code>Jellyfin → Dashboard → API Keys</code>.</p>
+      <div class="field">
+        <label>Jellyfin URL</label>
+        <input type="text" id="JELLYFIN_URL" placeholder="http://10.0.0.10:8096">
+      </div>
+      <div class="field">
+        <label>Jellyfin API key</label>
+        <input type="password" id="JELLYFIN_API_KEY" placeholder="optional">
+        <button type="button" class="test-btn" onclick="testConn('jellyfin')">Test connection</button>
+        <span id="r-jellyfin" class="test-result"></span>
+      </div>
+    </div>
+
+    <!-- Step 3: Seerr -->
+    <div class="step" data-step="3">
+      <h2>Seerr</h2>
+      <p class="lede">Optional but recommended. Used to resolve IMDB IDs for requests that don't include one, and for catch-up sync of approved movies. From <code>Jellyseerr/Overseerr → Settings → General → API Key</code>.</p>
+      <div class="field">
+        <label>Seerr URL</label>
+        <input type="text" id="SEERR_URL" placeholder="http://10.0.0.10:5055">
+      </div>
+      <div class="field">
+        <label>Seerr API key</label>
+        <input type="password" id="SEERR_API_KEY" placeholder="optional">
+        <button type="button" class="test-btn" onclick="testConn('seerr')">Test connection</button>
+        <span id="r-seerr" class="test-result"></span>
+      </div>
+      <div class="field">
+        <label>TMDB API read access token</label>
+        <input type="password" id="TMDB_API_KEY" placeholder="optional - starts with 'ey...'">
+        <span class="hint">Free key at <code>themoviedb.org/settings/api</code>. Used for poster lookups and metadata enrichment.</span>
+      </div>
+    </div>
+
+    <!-- Step 4: preferences -->
+    <div class="step" data-step="4">
+      <h2>Quality &amp; language</h2>
+      <p class="lede">How should Mycelium rank candidates? You can tweak these per-show later via the Overrides tab.</p>
+      <div class="field">
+        <label>Quality preference (in order)</label>
+        <input type="text" id="QUALITY_PREFERENCE" value="1080p,2160p,720p">
+        <span class="hint">Comma-separated. Mycelium tries each in order until one is cached on TorBox.</span>
+      </div>
+      <div class="field">
+        <label>Audio language preference</label>
+        <input type="text" id="AUDIO_LANGUAGE_PREFERENCE" placeholder="nl,en (leave empty for no preference)">
+        <span class="hint">Boosts releases with matching audio. Use ISO codes like <code>nl</code>, <code>en</code>, <code>multi</code>.</span>
+      </div>
+      <label class="check-row">
+        <input type="checkbox" id="PREFER_HEVC" checked>
+        <span><span class="t">Prefer HEVC / x265 encodes</span><br><span class="d">~40% smaller files at similar quality.</span></span>
+      </label>
+      <label class="check-row">
+        <input type="checkbox" id="ALLOW_4K" checked>
+        <span><span class="t">Allow 4K releases</span><br><span class="d">Large files, only sensible on fast LAN.</span></span>
+      </label>
+    </div>
+
+    <!-- Step 5: Catbox -->
+    <div class="step" data-step="5">
+      <h2>Catbox lazy mode</h2>
+      <p class="lede">When enabled, torrents only enter TorBox when you press play, and leave after idle time. Lets your library grow unlimited while staying within TorBox's 30-day cache window.</p>
+      <label class="check-row">
+        <input type="checkbox" id="CATBOX_MODE">
+        <span><span class="t">Enable Catbox mode</span><br><span class="d">Recommended once you've verified the basic flow works.</span></span>
+      </label>
+      <div class="field" style="margin-top:14px">
+        <label>Catbox host (reachable from Jellyfin)</label>
+        <input type="text" id="CATBOX_HOST" placeholder="http://10.0.0.10:8088">
+        <span class="hint">This URL is written into .strm files. Must be reachable from your Jellyfin container.</span>
+      </div>
+    </div>
+
+    <!-- Step 6: Notifications -->
+    <div class="step" data-step="6">
+      <h2>Notifications</h2>
+      <p class="lede">Optional. Get pinged on successful adds, failures, deadman alerts, disk-space warnings.</p>
+      <div class="field">
+        <label>Discord webhook URL</label>
+        <input type="password" id="DISCORD_WEBHOOK_URL" placeholder="optional">
+        <button type="button" class="test-btn" onclick="testConn('discord')">Test connection</button>
+        <span id="r-discord" class="test-result"></span>
+      </div>
+      <div class="field">
+        <label>Telegram bot token</label>
+        <input type="password" id="TELEGRAM_BOT_TOKEN" placeholder="optional">
+      </div>
+      <div class="field">
+        <label>Telegram chat ID</label>
+        <input type="text" id="TELEGRAM_CHAT_ID" placeholder="optional">
+        <button type="button" class="test-btn" onclick="testConn('telegram')">Test connection</button>
+        <span id="r-telegram" class="test-result"></span>
+      </div>
+    </div>
+
+    <!-- Step 7: Done -->
+    <div class="step" data-step="7">
+      <h2>All set.</h2>
+      <p class="lede">Mycelium will save your settings and take you to the dashboard. Configure Seerr's notifications webhook to point at:</p>
+      <div class="alert alert-ok" style="font-family:'JetBrains Mono',monospace;font-size:12px" id="webhook-url"></div>
+      <p class="lede">If you skipped Jellyfin/Seerr API keys, you can add them anytime under <b>Settings → Connections</b>.</p>
+    </div>
+  </div>
+
+  <div class="foot">
+    <button type="button" class="btn btn-ghost" id="skip-btn" onclick="skipWizard()">Skip wizard</button>
+    <div class="step-actions">
+      <button type="button" class="btn btn-ghost" id="back-btn" onclick="goBack()" style="display:none">← Back</button>
+      <button type="button" class="btn btn-primary" id="next-btn" onclick="goNext()">Next →</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  const STEPS = 8;
+  let step = 0;
+  const data = {};
+
+  function render() {
+    document.querySelectorAll('.step').forEach(el => el.classList.remove('active'));
+    document.querySelector(`[data-step="${step}"]`).classList.add('active');
+    const prog = document.getElementById('progress');
+    prog.innerHTML = '';
+    for (let i = 0; i < STEPS; i++) {
+      const d = document.createElement('div');
+      if (i < step) d.classList.add('done');
+      else if (i === step) d.classList.add('active');
+      prog.appendChild(d);
+    }
+    document.getElementById('back-btn').style.display = step === 0 ? 'none' : '';
+    const nextBtn = document.getElementById('next-btn');
+    nextBtn.textContent = step === STEPS - 1 ? 'Finish' : 'Next →';
+    if (step === STEPS - 1) {
+      document.getElementById('webhook-url').textContent = location.origin + '/webhook';
+    }
+  }
+
+  function collect() {
+    document.querySelectorAll('input, select, textarea').forEach(el => {
+      if (!el.id) return;
+      if (el.type === 'checkbox') data[el.id] = el.checked;
+      else data[el.id] = el.value.trim();
+    });
+  }
+
+  function goNext() {
+    collect();
+    if (step === 1 && !data.TORBOX_API_KEY) {
+      alert('TorBox API key is required.');
+      return;
+    }
+    if (step === STEPS - 1) {
+      finish();
+      return;
+    }
+    step++;
+    render();
+  }
+
+  function goBack() {
+    if (step > 0) { step--; render(); }
+  }
+
+  function skipWizard() {
+    if (!confirm('Skip the wizard? You can configure everything via Settings tab later.')) return;
+    fetch('/setup/skip', { method: 'POST' }).then(() => location.href = '/ui');
+  }
+
+  async function testConn(kind) {
+    collect();
+    const el = document.getElementById('r-' + kind);
+    el.className = 'test-result pending';
+    el.textContent = '...';
+    try {
+      const fd = new FormData();
+      Object.entries(data).forEach(([k, v]) => fd.append(k, v));
+      const r = await fetch('/setup/test/' + kind, { method: 'POST', body: fd });
+      const d = await r.json();
+      el.className = 'test-result ' + (d.ok ? 'ok' : 'err');
+      el.textContent = d.ok ? '✓ ' + (d.detail || 'connected') : '✗ ' + (d.error || 'failed');
+    } catch (e) {
+      el.className = 'test-result err';
+      el.textContent = '✗ ' + e.message;
+    }
+  }
+
+  async function finish() {
+    const btn = document.getElementById('next-btn');
+    btn.disabled = true;
+    btn.textContent = 'Saving...';
+    try {
+      const fd = new FormData();
+      Object.entries(data).forEach(([k, v]) => fd.append(k, v));
+      const r = await fetch('/setup/save', { method: 'POST', body: fd });
+      if (!r.ok) throw new Error('save failed');
+      location.href = '/ui';
+    } catch (e) {
+      btn.disabled = false;
+      btn.textContent = 'Finish';
+      alert('Save failed: ' + e.message);
+    }
+  }
+
+  render();
+</script>
+</body>
+</html>

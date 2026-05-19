@@ -65,6 +65,15 @@ _INT_KEYS = {
 
 # Keys that take effect on the next access (no restart).
 HOT_RELOAD = {
+    "TORBOX_API_KEY",
+    "TORBOX_BASE_URL",
+    "JELLYFIN_URL",
+    "JELLYFIN_API_KEY",
+    "SEERR_URL",
+    "SEERR_API_KEY",
+    "TMDB_API_KEY",
+    "ZILEAN_URL",
+    "ZILEAN_ENABLED",
     "CATBOX_MODE",
     "CATBOX_IDLE_MINUTES",
     "QUALITY_PREFERENCE",
@@ -85,10 +94,25 @@ HOT_RELOAD = {
     "TELEGRAM_CHAT_ID",
     "AUTO_UPGRADE_ENABLED",
     "SEASON_PACK_CONSOLIDATION_ENABLED",
+    "WEBDAV_ENABLED",
+    "MULTI_DEBRID_ENABLED",
+    "REALDEBRID_API_KEY",
 }
 
 # Logical groups for the Settings UI tab.
 SETTING_GROUPS = [
+    {
+        "id": "connections",
+        "title": "Connections",
+        "keys": [
+            "TORBOX_API_KEY", "TORBOX_BASE_URL",
+            "JELLYFIN_URL", "JELLYFIN_API_KEY",
+            "SEERR_URL", "SEERR_API_KEY",
+            "TMDB_API_KEY",
+            "ZILEAN_ENABLED", "ZILEAN_URL",
+            "REALDEBRID_API_KEY", "MULTI_DEBRID_ENABLED",
+        ],
+    },
     {
         "id": "catbox",
         "title": "Catbox (lazy materialization)",

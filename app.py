@@ -310,6 +310,9 @@ def torbox_webhook():
 
 @app.get("/ui")
 def ui_dashboard():
+    import settings as _settings
+    if not _settings.get("SETUP_COMPLETE", False):
+        return redirect(url_for("setup_wizard"))
     return render_template(
         "ui.html",
         requests=db.get_recent(100),
@@ -321,6 +324,100 @@ def ui_dashboard():
         activity=db.get_activity(50),
         config=cfg,
     )
+
+
+# ── Setup wizard ──────────────────────────────────────────────────────────────
+
+@app.get("/setup")
+def setup_wizard():
+    return render_template("setup.html")
+
+
+@app.post("/setup/skip")
+def setup_skip():
+    import settings as _settings
+    _settings.set("SETUP_COMPLETE", True)
+    return jsonify(ok=True)
+
+
+@app.post("/setup/save")
+def setup_save():
+    import settings as _settings
+    saved = 0
+    for key, value in request.form.items():
+        # Treat empty strings as "clear override"
+        if value == "":
+            _settings.set(key, None)
+        elif key in _settings._BOOL_KEYS:
+            _settings.set(key, str(value).lower() in ("1", "true", "yes", "on"))
+        else:
+            _settings.set(key, value)
+        saved += 1
+    _settings.set("SETUP_COMPLETE", True)
+    log.info("Setup wizard saved %d settings", saved)
+    return jsonify(ok=True, saved=saved)
+
+
+@app.post("/setup/test/<kind>")
+def setup_test(kind: str):
+    """Test a single integration using values posted from the wizard form."""
+    f = request.form
+    try:
+        if kind == "torbox":
+            api_key = (f.get("TORBOX_API_KEY") or "").strip()
+            base = (f.get("TORBOX_BASE_URL") or cfg.TORBOX_BASE_URL).rstrip("/")
+            if not api_key:
+                return jsonify(ok=False, error="API key empty")
+            r = __import__("requests").get(
+                f"{base}/torrents/mylist",
+                headers={"Authorization": f"Bearer {api_key}"},
+                timeout=8,
+            )
+            return jsonify(ok=r.status_code < 400, detail=f"HTTP {r.status_code}")
+
+        if kind == "jellyfin":
+            url = (f.get("JELLYFIN_URL") or "").rstrip("/")
+            api_key = (f.get("JELLYFIN_API_KEY") or "").strip()
+            if not url:
+                return jsonify(ok=False, error="URL empty")
+            hdr = {"X-Emby-Token": api_key} if api_key else {}
+            r = __import__("requests").get(f"{url}/System/Info/Public", headers=hdr, timeout=6)
+            return jsonify(ok=r.status_code < 400,
+                            detail=(r.json() or {}).get("ServerName", "reachable") if r.headers.get("content-type", "").startswith("application/json") else "reachable")
+
+        if kind == "seerr":
+            url = (f.get("SEERR_URL") or "").rstrip("/")
+            api_key = (f.get("SEERR_API_KEY") or "").strip()
+            if not url:
+                return jsonify(ok=False, error="URL empty")
+            hdr = {"X-Api-Key": api_key} if api_key else {}
+            r = __import__("requests").get(f"{url}/api/v1/status", headers=hdr, timeout=6)
+            return jsonify(ok=r.status_code < 400, detail=f"HTTP {r.status_code}")
+
+        if kind == "discord":
+            url = (f.get("DISCORD_WEBHOOK_URL") or "").strip()
+            if not url:
+                return jsonify(ok=False, error="URL empty")
+            r = __import__("requests").post(
+                url, json={"content": "🧪 Mycelium setup test"}, timeout=6,
+            )
+            return jsonify(ok=r.status_code < 400, detail=f"HTTP {r.status_code}")
+
+        if kind == "telegram":
+            tok = (f.get("TELEGRAM_BOT_TOKEN") or "").strip()
+            chat = (f.get("TELEGRAM_CHAT_ID") or "").strip()
+            if not tok or not chat:
+                return jsonify(ok=False, error="token or chat empty")
+            r = __import__("requests").post(
+                f"https://api.telegram.org/bot{tok}/sendMessage",
+                json={"chat_id": chat, "text": "🧪 Mycelium setup test"},
+                timeout=6,
+            )
+            return jsonify(ok=r.status_code < 400, detail=f"HTTP {r.status_code}")
+
+        return jsonify(ok=False, error="unknown test"), 400
+    except Exception as exc:
+        return jsonify(ok=False, error=str(exc)[:120])
 
 
 @app.post("/ui/submit")

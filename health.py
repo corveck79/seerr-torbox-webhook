@@ -2,13 +2,13 @@ import logging
 
 import requests
 
+import settings
 from config import (
     JELLYFIN_API_KEY,
     JELLYFIN_URL,
     SEERR_API_KEY,
     SEERR_URL,
     TMDB_API_KEY,
-    TORBOX_API_KEY,
     TORBOX_BASE_URL,
     TORRENTIO_BASE_URL,
     ZILEAN_ENABLED,
@@ -32,7 +32,7 @@ def check_all() -> list[dict]:
     services.append(_ping(
         "TorBox",
         f"{TORBOX_BASE_URL.rstrip('/')}/torrents/mylist",
-        headers={"Authorization": f"Bearer {TORBOX_API_KEY}"},
+        headers={"Authorization": f"Bearer {settings.get('TORBOX_API_KEY', '')}"},
     ))
     if ZILEAN_ENABLED:
         services.append(_ping("Zilean", f"{ZILEAN_URL.rstrip('/')}/healthz"))
