@@ -885,6 +885,44 @@ def ui_api_virtual_items():
     } for i in items])
 
 
+@app.post("/ui/api/virtual-items/<token>/re-resolve")
+@_csrf.exempt
+def ui_api_re_resolve(token: str):
+    """Clear fail state for a token and trigger a fresh materialize attempt."""
+    item = db.get_virtual_item(token)
+    if not item:
+        return jsonify(error="unknown token"), 404
+    # Clear in-memory caches
+    catbox.invalidate_url_cache(token)
+    with catbox._fail_cache_lock:
+        catbox._fail_cache.pop(token, None)
+    # Reset persistent state
+    import catbox as _catbox
+    ckey = _catbox._content_key(item)
+    if ckey:
+        db.reset_playability_state(ckey)
+    # Attempt fresh materialize in background, return immediately
+    result: dict = {}
+    import threading as _threading
+    def _try():
+        url = catbox.materialize(token, allow_readd=True)
+        result["url"] = url
+    t = _threading.Thread(target=_try, daemon=True)
+    t.start()
+    t.join(timeout=50)
+    if result.get("url"):
+        return jsonify(ok=True, resolved=True, title=item["title"])
+    return jsonify(ok=True, resolved=False, title=item["title"],
+                   hint="check logs — re-resolve attempted but no URL returned")
+
+
+@app.get("/ui/api/playability-state")
+def ui_api_playability_state():
+    """Return degraded items with 3+ consecutive failures."""
+    items = db.get_degraded_items(min_failures=3)
+    return jsonify(items=items)
+
+
 @app.post("/ui/catbox-gc")
 def ui_catbox_gc():
     n = catbox.release_idle()
