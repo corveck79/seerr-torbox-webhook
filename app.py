@@ -1123,11 +1123,15 @@ def ui_api_discover_details():
 
 @app.post("/ui/api/discover/add")
 def ui_api_discover_add():
-    """One-click add: resolve TMDB→IMDB, queue for processing."""
+    """One-click add: resolve TMDB→IMDB, queue for processing.
+    For TV the payload may include monitor_mode ('all'|'future'|'selected')
+    and seasons (list of season numbers, used when mode is 'selected')."""
     payload = request.get_json(silent=True) or {}
     tmdb_id = payload.get("tmdb_id")
     media_type = payload.get("media_type") or "movie"
     title = payload.get("title") or ""
+    monitor_mode = payload.get("monitor_mode") or "all"
+    seasons = payload.get("seasons") or None
     if not tmdb_id or not title:
         return jsonify(error="tmdb_id and title required"), 400
 
@@ -1143,29 +1147,41 @@ def ui_api_discover_add():
         rid = db.create_user_request(user_rec["id"], imdb_id, tmdb_id, media_type,
                                        title, status=status)
         if status == "approved":
-            _kick_off_processing(title, imdb_id, media_type, tmdb_id)
+            _kick_off_processing(title, imdb_id, media_type, tmdb_id, monitor_mode, seasons)
         return jsonify(status=status, request_id=rid, imdb_id=imdb_id)
 
     # Single-user / legacy mode: process immediately
-    _kick_off_processing(title, imdb_id, media_type, tmdb_id)
+    _kick_off_processing(title, imdb_id, media_type, tmdb_id, monitor_mode, seasons)
     return jsonify(status="queued", imdb_id=imdb_id)
 
 
 def _kick_off_processing(title: str, imdb_id: str, media_type: str,
-                          tmdb_id: int | None = None) -> None:
+                          tmdb_id: int | None = None,
+                          monitor_mode: str = "all",
+                          seasons: list[int] | None = None) -> None:
     from webhook_parser import MediaRequest
     if media_type == "tv":
-        seasons: list[int] = []
         try:
             show = tmdb.get_show_info(tmdb_id) if tmdb_id else None
             n_seasons = (show or {}).get("number_of_seasons") or 1
-            seasons = list(range(1, n_seasons + 1))
-            db.upsert_monitored_series(imdb_id, tmdb_id, title, seasons)
+            all_seasons = list(range(1, n_seasons + 1))
+            if monitor_mode == "selected" and seasons:
+                monitored = [int(s) for s in seasons if int(s) in all_seasons]
+            else:
+                monitored = all_seasons
+            db.upsert_monitored_series(imdb_id, tmdb_id, title, monitored, monitor_mode=monitor_mode)
         except Exception as exc:
             log.warning("upsert_monitored_series failed: %s", exc)
-            seasons = seasons or [1]
+            monitored = seasons or [1]
+        # 'future' mode: don't eagerly fetch the back-catalog — let the monitor
+        # pick up episodes as they air. Eagerly process only for all/selected.
+        process_seasons = [] if monitor_mode == "future" else monitored
         req = MediaRequest(title=title, media_type="series",
-                            imdb_id=imdb_id, seasons=seasons)
+                            imdb_id=imdb_id, seasons=process_seasons)
+        if not process_seasons:
+            # Nothing to fetch now; the series is monitored and the periodic
+            # check will grab future episodes.
+            return
     else:
         req = MediaRequest(title=title, media_type="movie", imdb_id=imdb_id, seasons=[])
     threading.Thread(

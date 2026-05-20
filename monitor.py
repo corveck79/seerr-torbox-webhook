@@ -65,8 +65,18 @@ def add_series(imdb_id: str, title: str, seasons: list[int]) -> None:
     log.info("Monitor: added series %s (%s), monitoring seasons %s", title, imdb_id, seasons)
 
 
-def _sync_wanted(imdb_id: str, tmdb_id: int, title: str, seasons: list[int]) -> None:
+def _sync_wanted(imdb_id: str, tmdb_id: int, title: str, seasons: list[int],
+                 monitor_mode: str = "all", since: str | None = None) -> None:
+    """Refresh the wanted-episode list for the monitored seasons.
+
+    monitor_mode:
+      all     — every episode of the monitored seasons (back-catalog included)
+      future  — only episodes airing on/after `since` (the date the series was
+                added); already-aired episodes are not monitored
+      selected— same as all, but `seasons` already contains only the chosen ones
+    """
     today = _TODAY()
+    cutoff = since or today
     for season in seasons:
         episodes = tmdb.get_season_episodes(tmdb_id, season)
         for ep in episodes:
@@ -74,6 +84,10 @@ def _sync_wanted(imdb_id: str, tmdb_id: int, title: str, seasons: list[int]) -> 
             air_date = ep.get("air_date") or None
             if not ep_num:
                 continue
+            if monitor_mode == "future":
+                # Skip anything that aired before we started monitoring.
+                if not air_date or air_date < cutoff:
+                    continue
             if air_date and air_date > today:
                 db.upsert_wanted_episode(imdb_id, tmdb_id, title, season, ep_num, air_date)
                 db.mark_episode_status(imdb_id, season, ep_num, "not_aired")
@@ -95,6 +109,8 @@ def run_series_check() -> None:
         title = series["title"]
         tmdb_id = series["tmdb_id"]
         seasons = [int(s) for s in (series["seasons"] or "1").split(",") if s.strip().isdigit()]
+        monitor_mode = series.get("monitor_mode") or "all"
+        since = series.get("added_at_date")
 
         # Resolve TMDB ID if missing
         if not tmdb_id:
@@ -107,19 +123,21 @@ def run_series_check() -> None:
             db.update_monitored_series(series["id"])
             continue
 
-        # Detect new seasons via TMDB
-        show = tmdb.get_show_info(tmdb_id)
-        if show:
-            total = show.get("number_of_seasons") or 0
-            new_seasons = [s for s in range(1, total + 1) if s not in seasons]
-            if new_seasons:
-                log.info("Monitor: new season(s) %s detected for %s", new_seasons, title)
-                seasons = sorted(set(seasons) | set(new_seasons))
-                db.update_monitored_series(series["id"], seasons=seasons)
-                _search_and_add_season(imdb_id, title, new_seasons)
+        # Detect new seasons via TMDB. For 'selected' mode we never auto-expand —
+        # the user picked specific seasons. For 'all' and 'future' we pick up new
+        # seasons as they're announced.
+        if monitor_mode != "selected":
+            show = tmdb.get_show_info(tmdb_id)
+            if show:
+                total = show.get("number_of_seasons") or 0
+                new_seasons = [s for s in range(1, total + 1) if s not in seasons]
+                if new_seasons:
+                    log.info("Monitor: new season(s) %s detected for %s", new_seasons, title)
+                    seasons = sorted(set(seasons) | set(new_seasons))
+                    db.update_monitored_series(series["id"], seasons=seasons)
 
-        # Refresh wanted list
-        _sync_wanted(imdb_id, tmdb_id, title, seasons)
+        # Refresh wanted list (mode-aware)
+        _sync_wanted(imdb_id, tmdb_id, title, seasons, monitor_mode=monitor_mode, since=since)
         db.update_monitored_series(series["id"])
 
     # Retry wanted episodes — keep watching indefinitely (like Radarr/Sonarr).

@@ -282,7 +282,22 @@ def init() -> None:
             if stmt:
                 conn.execute(stmt)
         conn.commit()
+    _migrate()
     integrity_check()
+
+
+def _migrate() -> None:
+    """Lightweight additive migrations for columns added after first release."""
+    with _connect() as conn:
+        cols = {r["name"] for r in conn.execute("PRAGMA table_info(monitored_series)")}
+        if "monitor_mode" not in cols:
+            # all | future | selected — controls which episodes get monitored.
+            conn.execute("ALTER TABLE monitored_series ADD COLUMN monitor_mode TEXT NOT NULL DEFAULT 'all'")
+            log.info("Migration: added monitored_series.monitor_mode")
+        if "added_at_date" not in cols:
+            conn.execute("ALTER TABLE monitored_series ADD COLUMN added_at_date TEXT")
+            log.info("Migration: added monitored_series.added_at_date")
+        conn.commit()
 
 
 def integrity_check() -> bool:
@@ -378,18 +393,20 @@ def get_recent(limit: int = 100) -> list[dict]:
 
 # ── monitored_series ──────────────────────────────────────────────────────────
 
-def upsert_monitored_series(imdb_id: str, tmdb_id: int | None, title: str, seasons: list[int]) -> None:
+def upsert_monitored_series(imdb_id: str, tmdb_id: int | None, title: str,
+                            seasons: list[int], monitor_mode: str = "all") -> None:
     seasons_str = ",".join(str(s) for s in seasons)
     with _connect() as conn:
         conn.execute(
-            """INSERT INTO monitored_series (imdb_id, tmdb_id, title, seasons)
-               VALUES (?, ?, ?, ?)
+            """INSERT INTO monitored_series (imdb_id, tmdb_id, title, seasons, monitor_mode, added_at_date)
+               VALUES (?, ?, ?, ?, ?, strftime('%Y-%m-%d','now'))
                ON CONFLICT(imdb_id) DO UPDATE SET
                  tmdb_id=COALESCE(excluded.tmdb_id, tmdb_id),
                  title=excluded.title,
                  seasons=excluded.seasons,
+                 monitor_mode=excluded.monitor_mode,
                  status='active'""",
-            (imdb_id, tmdb_id, title, seasons_str),
+            (imdb_id, tmdb_id, title, seasons_str, monitor_mode),
         )
         conn.commit()
 

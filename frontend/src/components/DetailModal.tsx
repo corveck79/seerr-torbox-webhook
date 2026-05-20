@@ -38,15 +38,31 @@ export default function DetailModal({
     'idle',
   );
 
+  // TV monitoring scope
+  const [monitorMode, setMonitorMode] = useState<'all' | 'future' | 'selected'>('all');
+  const [selectedSeasons, setSelectedSeasons] = useState<number[]>([]);
+
   const addMutation = useMutation({
     mutationFn: () =>
-      api.addToLibrary(detail!.tmdb_id, detail!.media_type, detail!.title),
+      api.addToLibrary(
+        detail!.tmdb_id,
+        detail!.media_type,
+        detail!.title,
+        detail!.media_type === 'tv'
+          ? { monitor_mode: monitorMode, seasons: selectedSeasons }
+          : undefined,
+      ),
     onMutate: () => setAddStatus('adding'),
     onSuccess: (r) => {
       setAddStatus(r.status === 'pending' ? 'pending' : 'added');
     },
     onError: () => setAddStatus('error'),
   });
+
+  const toggleSeason = (n: number) =>
+    setSelectedSeasons((prev) =>
+      prev.includes(n) ? prev.filter((x) => x !== n) : [...prev, n].sort((a, b) => a - b),
+    );
 
   const watchlistMutation = useMutation({
     mutationFn: async () => {
@@ -156,11 +172,72 @@ export default function DetailModal({
                   {detail.overview || 'No overview available.'}
                 </p>
 
+                {detail.media_type === 'tv' && (
+                  <div className="mt-4 bg-bg/60 border border-border rounded-lg p-3">
+                    <div className="text-[10px] uppercase tracking-wider text-muted font-semibold mb-2">
+                      What to monitor
+                    </div>
+                    <div className="flex gap-2 mb-2">
+                      {([
+                        ['all', 'All seasons'],
+                        ['future', 'Future episodes only'],
+                        ['selected', 'Pick seasons'],
+                      ] as const).map(([mode, label]) => (
+                        <button
+                          key={mode}
+                          type="button"
+                          onClick={() => setMonitorMode(mode)}
+                          className={`text-xs px-3 py-1.5 rounded border ${
+                            monitorMode === mode
+                              ? 'border-accent bg-accent/10 text-white'
+                              : 'border-border text-muted hover:text-white'
+                          }`}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                    {monitorMode === 'selected' && detail.seasons && (
+                      <div className="flex flex-wrap gap-1.5 mt-2">
+                        {detail.seasons
+                          .filter((s) => s.season_number >= 1)
+                          .map((s) => (
+                            <button
+                              key={s.season_number}
+                              type="button"
+                              onClick={() => toggleSeason(s.season_number)}
+                              className={`text-xs px-2 py-1 rounded border ${
+                                selectedSeasons.includes(s.season_number)
+                                  ? 'border-accent bg-accent text-white'
+                                  : 'border-border text-muted hover:text-white'
+                              }`}
+                              title={`${s.episode_count} eps`}
+                            >
+                              S{s.season_number}
+                            </button>
+                          ))}
+                      </div>
+                    )}
+                    {monitorMode === 'future' && (
+                      <p className="text-[11px] text-muted mt-1">
+                        Only episodes airing from now on — the back-catalog is skipped.
+                      </p>
+                    )}
+                  </div>
+                )}
+
                 <div className="flex flex-wrap gap-2 mt-5">
                   <button
                     type="button"
                     onClick={() => addMutation.mutate()}
-                    disabled={addStatus === 'adding' || addStatus === 'added' || addStatus === 'pending'}
+                    disabled={
+                      addStatus === 'adding' ||
+                      addStatus === 'added' ||
+                      addStatus === 'pending' ||
+                      (detail.media_type === 'tv' &&
+                        monitorMode === 'selected' &&
+                        selectedSeasons.length === 0)
+                    }
                     className="px-4 py-2 rounded-lg bg-accent hover:bg-accent/90 disabled:opacity-60
                                 disabled:cursor-not-allowed font-semibold text-sm"
                   >
@@ -172,6 +249,8 @@ export default function DetailModal({
                       ? '⏳ Pending approval'
                       : addStatus === 'error'
                       ? 'Retry'
+                      : detail.media_type === 'tv'
+                      ? '+ Monitor series'
                       : '+ Add to library'}
                   </button>
                   <button

@@ -66,10 +66,18 @@ export const api = {
     ),
   details: (type: MediaType, id: number) =>
     http<TmdbDetail>(`/ui/api/discover/details?type=${type}&id=${id}`),
-  addToLibrary: (tmdb_id: number, media_type: MediaType, title: string) =>
+  addToLibrary: (
+    tmdb_id: number,
+    media_type: MediaType,
+    title: string,
+    opts?: { monitor_mode?: 'all' | 'future' | 'selected'; seasons?: number[] },
+  ) =>
     http<{ status: string; request_id?: number; imdb_id?: string; error?: string }>(
       '/ui/api/discover/add',
-      { method: 'POST', body: JSON.stringify({ tmdb_id, media_type, title }) },
+      {
+        method: 'POST',
+        body: JSON.stringify({ tmdb_id, media_type, title, ...opts }),
+      },
     ),
 
   // Watchlist
