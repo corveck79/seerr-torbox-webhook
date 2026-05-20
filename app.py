@@ -333,6 +333,7 @@ _delayed(30.0, strm_generator.run_and_refresh, "strm-init")
 _delayed(60.0, library_sync.resolve_unknowns, "resolve-unknowns-init")
 _delayed(90.0, library_sync.import_series_to_monitored, "series-monitored-init")
 _delayed(120.0, nfo_generator.generate_all, "nfo-init")
+_delayed(150.0, nfo_generator.fetch_local_images, "images-init")
 
 
 # ── Auth ──────────────────────────────────────────────────────────────────────
@@ -641,8 +642,11 @@ def ui_merge_series():
 
 @app.post("/ui/generate-nfos")
 def ui_generate_nfos():
-    threading.Thread(target=nfo_generator.generate_all, name="nfo-manual", daemon=True).start()
-    flash("NFO generation started — Jellyfin will pick up metadata on next scan", "ok")
+    def _run():
+        nfo_generator.generate_all()
+        nfo_generator.fetch_local_images()
+    threading.Thread(target=_run, name="nfo-manual", daemon=True).start()
+    flash("NFO + image download started — Jellyfin will pick up metadata on next scan", "ok")
     return redirect(url_for("ui_dashboard") + "#repair")
 
 
@@ -941,6 +945,7 @@ def _library_import_and_resolve():
     library_sync.resolve_unknowns()
     library_sync.import_series_to_monitored()
     nfo_generator.generate_all()
+    nfo_generator.fetch_local_images()
 
 
 @app.post("/ui/library-import")

@@ -11,11 +11,19 @@ all tvshow.nfo files allows Jellyfin to merge them into a single library entry.
 import logging
 import re
 import time
+import xml.etree.ElementTree as ET
 from pathlib import Path
+
+import requests as _requests
 
 import db
 import tmdb
 from config import MEDIA_PATH
+
+_IMAGE_BASE_POSTER = "https://image.tmdb.org/t/p/w500"
+_IMAGE_BASE_BACKDROP = "https://image.tmdb.org/t/p/w1280"
+_IMAGE_BASE_STILL = "https://image.tmdb.org/t/p/w300"
+_EP_RE = re.compile(r"[Ss](\d{1,2})[Ee](\d{1,3})")
 
 log = logging.getLogger(__name__)
 
@@ -64,6 +72,33 @@ def _tvshow_nfo(title: str, imdb_id: str) -> str:
         f'  <uniqueid type="imdb" default="true">{imdb_id}</uniqueid>\n'
         "</tvshow>\n"
     )
+
+
+def _read_imdb_from_nfo(nfo_path: Path) -> str | None:
+    """Parse IMDb ID from a Kodi/Jellyfin .nfo file."""
+    try:
+        root = ET.parse(nfo_path).getroot()
+        for uid in root.findall("uniqueid"):
+            if uid.get("type") == "imdb" and uid.text:
+                return uid.text.strip()
+    except Exception:
+        pass
+    return None
+
+
+def _download_image(url: str, dest: Path) -> bool:
+    try:
+        resp = _requests.get(url, timeout=20, stream=True)
+        resp.raise_for_status()
+        with open(dest, "wb") as fh:
+            for chunk in resp.iter_content(65536):
+                fh.write(chunk)
+        log.info("Saved image: %s", dest)
+        return True
+    except Exception as exc:
+        log.debug("Image download failed %s: %s", dest.name, exc)
+        dest.unlink(missing_ok=True)
+        return False
 
 
 def _write(path: Path, content: str) -> bool:
@@ -166,3 +201,89 @@ def generate_all() -> dict:
 
     log.info("NFO generation complete: %d movie(s), %d series", movies, series)
     return {"movies": movies, "series": series}
+
+
+def fetch_local_images() -> dict:
+    """Download poster.jpg, fanart.jpg, and episode stills from TMDB for all media folders.
+
+    Skips files that already exist so re-runs are cheap. Sleeps 150 ms between
+    TMDB calls to stay well under the 50 req/s rate limit.
+    """
+    media = Path(MEDIA_PATH)
+    m_count = s_count = e_count = 0
+
+    movies_dir = media / "movies"
+    if movies_dir.is_dir():
+        for folder in sorted(movies_dir.iterdir()):
+            if not folder.is_dir():
+                continue
+            poster = folder / "poster.jpg"
+            fanart = folder / "fanart.jpg"
+            if poster.exists() and fanart.exists():
+                continue
+            nfo = folder / f"{folder.name}.nfo"
+            if not nfo.exists():
+                continue
+            imdb_id = _read_imdb_from_nfo(nfo)
+            if not imdb_id:
+                continue
+            try:
+                p, b = tmdb.get_images(imdb_id, "movie")
+                time.sleep(0.15)
+            except Exception:
+                continue
+            if p and not poster.exists():
+                if _download_image(f"{_IMAGE_BASE_POSTER}{p}", poster):
+                    m_count += 1
+            if b and not fanart.exists():
+                _download_image(f"{_IMAGE_BASE_BACKDROP}{b}", fanart)
+
+    series_dir = media / "series"
+    if series_dir.is_dir():
+        for folder in sorted(series_dir.iterdir()):
+            if not folder.is_dir():
+                continue
+            nfo = folder / "tvshow.nfo"
+            imdb_id = _read_imdb_from_nfo(nfo) if nfo.exists() else None
+
+            if imdb_id:
+                poster = folder / "poster.jpg"
+                fanart = folder / "fanart.jpg"
+                if not poster.exists() or not fanart.exists():
+                    try:
+                        p, b = tmdb.get_images(imdb_id, "tv")
+                        time.sleep(0.15)
+                        if p and not poster.exists():
+                            if _download_image(f"{_IMAGE_BASE_POSTER}{p}", poster):
+                                s_count += 1
+                        if b and not fanart.exists():
+                            _download_image(f"{_IMAGE_BASE_BACKDROP}{b}", fanart)
+                    except Exception:
+                        pass
+
+                # Episode stills — one TMDB call per missing thumbnail
+                tmdb_id = tmdb.find_by_imdb(imdb_id, kind="tv")
+                if tmdb_id:
+                    time.sleep(0.15)
+                    for season_folder in sorted(folder.iterdir()):
+                        if not season_folder.is_dir():
+                            continue
+                        for strm in sorted(season_folder.glob("*.strm")):
+                            thumb = strm.with_name(f"{strm.stem}-thumb.jpg")
+                            if thumb.exists():
+                                continue
+                            m = _EP_RE.search(strm.name)
+                            if not m:
+                                continue
+                            s_num, e_num = int(m.group(1)), int(m.group(2))
+                            try:
+                                still = tmdb.get_episode_still(tmdb_id, s_num, e_num)
+                                time.sleep(0.15)
+                            except Exception:
+                                continue
+                            if still and _download_image(f"{_IMAGE_BASE_STILL}{still}", thumb):
+                                e_count += 1
+
+    log.info("fetch_local_images: %d movie poster(s), %d series poster(s), %d episode still(s)",
+             m_count, s_count, e_count)
+    return {"movies": m_count, "series": s_count, "episodes": e_count}

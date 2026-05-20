@@ -81,6 +81,27 @@ def get_poster_path(imdb_id: str, media_type: str = "movie") -> str | None:
     return poster
 
 
+def get_images(imdb_id: str, media_type: str = "movie") -> tuple[str | None, str | None]:
+    """Return (poster_path, backdrop_path) for an IMDb ID via TMDB /find."""
+    data = _get(f"/find/{imdb_id}", params={"external_source": "imdb_id"})
+    if not data:
+        return None, None
+    key = "movie_results" if media_type == "movie" else "tv_results"
+    results = data.get(key) or data.get("tv_results") or data.get("movie_results") or []
+    if not results:
+        return None, None
+    item = results[0]
+    return item.get("poster_path"), item.get("backdrop_path")
+
+
+def get_episode_still(tmdb_id: int, season: int, episode: int) -> str | None:
+    """Return still_path for a TV episode, or None."""
+    data = _get(f"/tv/{tmdb_id}/season/{season}/episode/{episode}")
+    if not data:
+        return None
+    return data.get("still_path")
+
+
 def search_movie(title: str, year: int | None = None) -> str | None:
     """Search TMDB for a movie by title; return IMDB ID or None."""
     params: dict = {"query": title}
