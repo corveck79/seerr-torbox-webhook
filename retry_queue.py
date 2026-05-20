@@ -5,7 +5,6 @@ Failed requests are enqueued for retry at increasing intervals
 RETRY_QUEUE_INTERVAL_MINUTES and re-runs processor.process for them.
 """
 import logging
-import threading
 
 import db
 from config import RETRY_BACKOFF_MINUTES
@@ -26,29 +25,45 @@ def schedule(req: MediaRequest, attempt: int) -> None:
 
 
 def run_due() -> int:
-    """Process all retries whose next_retry_at is now in the past."""
+    """Process due retries SERIALLY (not as a thread stampede) and stop early
+    once the TorBox createtorrent budget is exhausted, so a backlog of
+    rate-limited items can't keep re-triggering 429s every cycle.
+    Items not processed this round are left in the queue for the next run."""
     import processor  # local import to avoid cycle
+    import torbox
     due = db.get_due_retries()
     if not due:
         return 0
-    log.info("Retry: processing %d due retries", len(due))
-    try:
-        import metrics_prom
-        metrics_prom.retry_attempts_total.inc(len(due))
-    except Exception:
-        pass
+
+    usage = torbox.createtorrent_usage()
+    if usage["count"] >= torbox._CREATETORRENT_LIMIT - 2:
+        log.info("Retry: skipping this cycle — createtorrent budget %d/%d (resets ~%dm)",
+                 usage["count"], torbox._CREATETORRENT_LIMIT,
+                 max(1, usage["resets_in_sec"] // 60))
+        return 0
+
+    log.info("Retry: processing up to %d due retries (budget %d/%d)",
+             len(due), usage["count"], torbox._CREATETORRENT_LIMIT)
+    processed = 0
     for row in due:
+        # Re-check budget before each item; bail out (leave the rest queued) when low.
+        if torbox.createtorrent_usage()["count"] >= torbox._CREATETORRENT_LIMIT - 2:
+            log.info("Retry: budget reached after %d item(s) — leaving %d for next cycle",
+                     processed, len(due) - processed)
+            break
         seasons = [int(s) for s in (row.get("seasons") or "").split(",") if s.strip().isdigit()]
         req = MediaRequest(
             title=row["title"], media_type=row["media_type"],
             imdb_id=row["imdb_id"], seasons=seasons,
         )
         db.remove_retry(row["id"])
-        threading.Thread(
-            target=processor.process,
-            args=(req,),
-            kwargs={"_retry_attempt": row["attempt"]},
-            name=f"retry-{row['imdb_id']}-{row['attempt']}",
-            daemon=True,
-        ).start()
-    return len(due)
+        try:
+            import metrics_prom
+            metrics_prom.retry_attempts_total.inc(1)
+        except Exception:
+            pass
+        # Serial: process inline so we observe quota between items instead of
+        # firing N parallel createtorrent calls at once.
+        processor.process(req, _retry_attempt=row["attempt"])
+        processed += 1
+    return processed

@@ -74,26 +74,24 @@ def _is_429(exc: Exception) -> bool:
 
 
 def _try_add_magnet(stream: TorrentioStream, label: str) -> bool:
-    """Try adding a single magnet to TorBox. On 429 waits 15s and retries once;
-    if still rate limited, raises RateLimited so the request is rescheduled
-    instead of blacklisting an otherwise-good torrent."""
-    for attempt in range(2):
-        try:
-            torbox.add_magnet(stream.magnet, reason="processor")
-            torbox.wait_until_ready(stream.info_hash)
-            return True
-        except Exception as exc:
-            if _is_429(exc):
-                if attempt == 0:
-                    log.warning("Rate limited (429) adding %s — waiting 15s then retrying", label)
-                    time.sleep(15)
-                    continue
-                log.warning("Still rate limited (429) adding %s — will retry later", label)
-                raise RateLimited()
-            log.warning("Failed to add %s (hash=%s): %s", label, stream.info_hash, exc)
-            blacklist.record_failure(stream.info_hash, str(exc)[:200])
-            return False
-    return False
+    """Add a single magnet to TorBox. Raises RateLimited (without blacklisting)
+    when the hourly createtorrent budget is gone, so the request is rescheduled
+    rather than wasting the quota or marking a good torrent bad. We do NOT retry
+    a 429 inline — the hourly window won't reset in seconds."""
+    try:
+        torbox.add_magnet(stream.magnet, reason="processor")
+        torbox.wait_until_ready(stream.info_hash)
+        return True
+    except torbox.RateLimited:
+        log.warning("createtorrent budget exhausted adding %s — will retry later", label)
+        raise RateLimited()
+    except Exception as exc:
+        if _is_429(exc):
+            log.warning("Rate limited (429) adding %s — will retry later", label)
+            raise RateLimited()
+        log.warning("Failed to add %s (hash=%s): %s", label, stream.info_hash, exc)
+        blacklist.record_failure(stream.info_hash, str(exc)[:200])
+        return False
 
 
 def _add_best_from(candidates: list, label: str) -> tuple[bool, Optional[TorrentioStream]]:

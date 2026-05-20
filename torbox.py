@@ -53,11 +53,25 @@ def createtorrent_usage(window_sec: int = 3600) -> dict:
     }
 
 
+_CREATETORRENT_LIMIT = 60  # TorBox: 60 createtorrent calls per hour per token
+
+
+class RateLimited(Exception):
+    """Raised (proactively) when the local createtorrent budget is exhausted, so
+    we never even send a request we know TorBox will reject with 429."""
+
+
 def add_magnet(magnet: str, timeout: int = 30, reason: str = "unknown") -> dict:
     url = f"{TORBOX_BASE_URL.rstrip('/')}/torrents/createtorrent"
-    _record_createtorrent(reason)
+    # Client-side guard: don't burn requests we know will be 429'd. Leave a
+    # small headroom (58) so concurrent callers / clock skew don't overshoot.
     usage = createtorrent_usage()
-    log.info("createtorrent [%s] (%d/60 this hour): %s", reason, usage["count"], magnet[:80])
+    if usage["count"] >= _CREATETORRENT_LIMIT - 2:
+        log.warning("createtorrent [%s] SKIPPED — local quota %d/%d reached (resets ~%ds)",
+                    reason, usage["count"], _CREATETORRENT_LIMIT, usage["resets_in_sec"])
+        raise RateLimited()
+    _record_createtorrent(reason)
+    log.info("createtorrent [%s] (%d/60 this hour): %s", reason, usage["count"] + 1, magnet[:80])
     resp = requests.post(url, headers=_headers(), data={"magnet": magnet}, timeout=timeout)
     resp.raise_for_status()
     payload = resp.json() or {}
