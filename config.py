@@ -101,6 +101,10 @@ CATBOX_MODE = _env("CATBOX_MODE", "false").lower() in ("1", "true", "yes")
 CATBOX_HOST = _env("CATBOX_HOST", "http://10.0.0.10:8088")
 CATBOX_IDLE_MINUTES = _env_int("CATBOX_IDLE_MINUTES", 1440)
 CATBOX_GC_INTERVAL_MINUTES = _env_int("CATBOX_GC_INTERVAL_MINUTES", 10)
+# True lazy materialization: on import, only verify the release is cached and
+# register a virtual .strm — defer createtorrent to first playback. Massively
+# reduces createtorrent (60/hour) usage for large libraries. Movies only for now.
+CATBOX_LAZY_ADD = _env("CATBOX_LAZY_ADD", "false").lower() in ("1", "true", "yes")
 
 # ── DB backup ─────────────────────────────────────────────────────────────────
 BACKUP_INTERVAL_HOURS = _env_int("BACKUP_INTERVAL_HOURS", 24)

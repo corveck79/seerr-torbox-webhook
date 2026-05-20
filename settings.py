@@ -25,6 +25,7 @@ _BOOL_KEYS = {
     "PREFER_HEVC",
     "ZILEAN_ENABLED",
     "CATCHUP_ENABLED",
+    "CATBOX_LAZY_ADD",
     "AUTO_UPGRADE_ENABLED",
     "SEASON_PACK_CONSOLIDATION_ENABLED",
     "NOTIFY_ON_SUCCESS",
@@ -85,6 +86,7 @@ HOT_RELOAD = {
     "ZILEAN_URL",
     "ZILEAN_ENABLED",
     "CATBOX_MODE",
+    "CATBOX_LAZY_ADD",
     "CATBOX_IDLE_MINUTES",
     "QUALITY_PREFERENCE",
     "ALLOW_4K",
@@ -137,7 +139,7 @@ SETTING_GROUPS = [
     {
         "id": "catbox",
         "title": "Catbox (lazy materialization)",
-        "keys": ["CATBOX_MODE", "CATBOX_HOST", "CATBOX_IDLE_MINUTES", "CATBOX_GC_INTERVAL_MINUTES"],
+        "keys": ["CATBOX_MODE", "CATBOX_LAZY_ADD", "CATBOX_HOST", "CATBOX_IDLE_MINUTES", "CATBOX_GC_INTERVAL_MINUTES"],
     },
     {
         "id": "quality",

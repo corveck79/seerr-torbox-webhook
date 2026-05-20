@@ -119,6 +119,33 @@ def _get_stream_url(torrent_id: int, file_id: int) -> str | None:
         return None
 
 
+def _extract_year(name: str) -> int | None:
+    m = _YEAR_RE.search(name or "")
+    return int(m.group(1)) if m else None
+
+
+def create_lazy_movie_strm(info_hash: str, magnet: str, title: str,
+                            year: int | None) -> bool:
+    """Write a Catbox virtual movie .strm WITHOUT adding the torrent to TorBox.
+    createtorrent is deferred until first playback (see catbox.materialize).
+    Returns True if a new .strm was written."""
+    import catbox
+    folder = _safe(f"{title} ({year})") if year else _safe(title)
+    if not folder:
+        return False
+    path = Path(MEDIA_PATH) / "movies" / folder / f"{folder}.strm"
+    token = catbox.register(
+        info_hash=(info_hash or "").lower(),
+        magnet=magnet,
+        title=folder,
+        media_type="movie",
+        torbox_id=None,   # ← deferred: no createtorrent yet
+        file_id=None,
+        strm_path=str(path),
+    )
+    return _write_strm(path, catbox.proxy_url(token))
+
+
 def _write_strm(path: Path, url: str) -> bool:
     """Write .strm file only if it doesn't exist. Returns True if a new file was written."""
     if path.exists():
