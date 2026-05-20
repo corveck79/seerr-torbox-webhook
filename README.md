@@ -211,8 +211,8 @@ That's it. Out of the box Mycelium uses [Torrentio](https://torrentio.strem.fun)
 ### Install
 
 ```bash
-git clone https://github.com/corveck79/myce.git
-cd myce
+git clone https://github.com/corveck79/mycelium.git
+cd mycelium
 docker compose up -d --build
 ```
 
