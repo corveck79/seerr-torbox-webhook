@@ -8,6 +8,7 @@ from config import (
     ALLOW_4K,
     AUDIO_LANGUAGE_PREFERENCE,
     EXCLUDE_CAM,
+    EXCLUDE_LANGUAGES,
     EXCLUDE_REMUX,
     MAX_SIZE_GB,
     MIN_SEEDERS,
@@ -39,6 +40,7 @@ _LANG_PATTERNS = {
     "nl":     re.compile(r"\b(dutch|nederlands?|nl[. -]?(?:nlt?[. -]?)?(?:dubbed|sub|audio|subs)|nl(?:nlt)?\b|nlsubs?)\b", re.IGNORECASE),
     "en":     re.compile(r"\b(english|eng(?:lish)?(?:[. -](?:audio|dubbed|dub))?|eng-?subs?)\b", re.IGNORECASE),
     "multi":  re.compile(r"\b(multi(?:lang|-?audio|-?subs?)?|dual[. -]?audio|tri-?audio)\b", re.IGNORECASE),
+    "ru":     re.compile(r"\b(russian|rus(?:sian)?|ru[. -]?dub(?:bed)?|rudub)\b|[а-яА-ЯёЁ]{4,}", re.IGNORECASE),
 }
 
 
@@ -227,6 +229,21 @@ def rank_streams(
             candidates = filtered
         else:
             log.warning("No candidates within MAX_SIZE_GB=%d; allowing all", max_size_gb)
+
+    exclude_langs = set(_settings.get("EXCLUDE_LANGUAGES", EXCLUDE_LANGUAGES) or [])
+    if exclude_langs:
+        pref_langs = set(audio_pref) | {"multi"}
+        filtered = [
+            s for s in candidates
+            if not (
+                any(lang in s.languages for lang in exclude_langs)
+                and not any(lang in s.languages for lang in pref_langs)
+            )
+        ]
+        if filtered:
+            candidates = filtered
+        else:
+            log.warning("All candidates match EXCLUDE_LANGUAGES; allowing all")
 
     def _lang_score(s: TorrentioStream) -> int:
         if not audio_pref:

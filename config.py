@@ -56,6 +56,9 @@ MIN_SEEDERS = _env_int("MIN_SEEDERS", 3)
 MAX_SIZE_GB = _env_int("MAX_SIZE_GB", 0)
 # Audio language preference (comma-separated codes: nl, en, multi). Empty = no preference.
 AUDIO_LANGUAGE_PREFERENCE = [l.strip().lower() for l in _env("AUDIO_LANGUAGE_PREFERENCE", "").split(",") if l.strip()]
+# Languages to hard-block (comma-separated codes, e.g. ru). Torrents detected as
+# exclusively in a blocked language are filtered out before sorting.
+EXCLUDE_LANGUAGES = [l.strip().lower() for l in _env("EXCLUDE_LANGUAGES", "").split(",") if l.strip()]
 
 # How long to wait for Torbox to make the torrent available before triggering Jellyfin scan.
 TORBOX_POLL_INTERVAL_SEC = _env_int("TORBOX_POLL_INTERVAL_SEC", 10)
