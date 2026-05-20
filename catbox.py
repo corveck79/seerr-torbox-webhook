@@ -20,6 +20,7 @@ import uuid
 from datetime import datetime, timedelta
 
 import db
+import settings as _settings
 import torbox
 from config import CATBOX_HOST, CATBOX_IDLE_MINUTES
 
@@ -455,10 +456,17 @@ def _search_best_cached_release(item: dict) -> tuple[str, str] | None | object:
         media_type = item["media_type"]
         season = item.get("season")
         episode = item.get("episode")
-        streams = torrentio.fetch_streams(
-            "movie" if media_type == "movie" else "series",
-            imdb_id, season=season, episode=episode,
-        )
+        import zilean as _zilean
+        streams: list = []
+        if _settings.get("ZILEAN_ENABLED", False):
+            streams = _zilean.fetch_streams(imdb_id, season=season, episode=episode)
+            log.info("Catbox search: Zilean returned %d stream(s) for %s (%s)",
+                     len(streams), item.get("title"), imdb_id)
+        if not streams:
+            streams = torrentio.fetch_streams(
+                "movie" if media_type == "movie" else "series",
+                imdb_id, season=season, episode=episode,
+            )
         log.info("Catbox search: Torrentio returned %d stream(s) for %s (%s)",
                  len(streams), item.get("title"), imdb_id)
         if not streams:
