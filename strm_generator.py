@@ -550,6 +550,102 @@ def run_and_refresh() -> None:
         log.debug("Self-heal sample failed: %s", exc)
 
 
+def repair_expired_strms(media_type: str = "movie") -> dict:
+    """Find .strm files containing expired direct-CDN URLs and repair them.
+
+    A .strm is considered broken when its URL is NOT a catbox proxy URL
+    (i.e. doesn't route through /stream/<token>).  For each broken file:
+      1. Read imdb_id from the .nfo sidecar.
+      2. If a virtual_item already exists for that imdb_id → rewrite the
+         .strm to point at the catbox proxy URL.
+      3. Otherwise → delete the .strm so the next processor run recreates it.
+    Returns a summary dict with counts.
+    """
+    from config import CATBOX_HOST
+    catbox_base = CATBOX_HOST.rstrip("/") + "/stream/"
+
+    media = Path(MEDIA_PATH)
+    sub = "movies" if media_type == "movie" else "series"
+    folder = media / sub
+    if not folder.is_dir():
+        return {"scanned": 0, "ok": 0, "relinked": 0, "deleted": 0, "skipped": 0}
+
+    scanned = ok = relinked = deleted = skipped = 0
+
+    for strm_path in folder.rglob("*.strm"):
+        scanned += 1
+        try:
+            url = strm_path.read_text(encoding="utf-8").strip()
+        except Exception:
+            skipped += 1
+            continue
+
+        # Already a valid catbox proxy URL — nothing to do.
+        if url.startswith(catbox_base):
+            ok += 1
+            continue
+
+        # Direct TorBox URL (or any non-proxy URL) — needs repair.
+        movie_folder = strm_path.parent
+
+        # Try to find imdb_id from .nfo
+        imdb_id: str | None = None
+        for nfo_file in movie_folder.glob("*.nfo"):
+            try:
+                text = nfo_file.read_text(encoding="utf-8", errors="ignore")
+                import re as _re
+                m = _re.search(r"<imdbid>(tt\d+)</imdbid>|<uniqueid[^>]*type=['\"]imdb['\"][^>]*>(tt\d+)</uniqueid>|(tt\d{7,})", text)
+                if m:
+                    imdb_id = next(g for g in m.groups() if g)
+                    break
+            except Exception:
+                continue
+
+        if not imdb_id:
+            log.warning("repair_strms: no imdb_id found for %s — skipping", strm_path)
+            skipped += 1
+            continue
+
+        # Check if a virtual_item already exists for this imdb_id.
+        items = db.get_virtual_items_by_imdb(imdb_id, media_type)
+        if items:
+            # Pick the item whose strm_path matches this file (or the first one).
+            item = next((i for i in items if i.get("strm_path") == str(strm_path)), items[0])
+            import catbox as _catbox
+            new_url = _catbox.proxy_url(item["token"])
+            try:
+                strm_path.write_text(new_url, encoding="utf-8")
+                log.info("repair_strms: relinked %s → catbox token %s", strm_path.name, item["token"])
+                relinked += 1
+            except Exception as exc:
+                log.warning("repair_strms: could not rewrite %s: %s", strm_path, exc)
+                skipped += 1
+        else:
+            # No virtual_item — delete so processor can recreate it, then re-queue.
+            try:
+                title = movie_folder.name
+                strm_path.unlink()
+                log.info("repair_strms: deleted expired strm %s (imdb=%s)", strm_path.name, imdb_id)
+                deleted += 1
+                # Re-queue via processor so it gets a catbox token on the next pass.
+                try:
+                    import processor as _proc
+                    from webhook_parser import MediaRequest as _MR
+                    req = _MR(title=title, media_type=media_type, imdb_id=imdb_id, seasons=[])
+                    import threading as _t
+                    _t.Thread(target=_proc.process, args=(req,),
+                              name=f"repair-{imdb_id}", daemon=True).start()
+                except Exception as exc2:
+                    log.warning("repair_strms: requeue failed for %s: %s", imdb_id, exc2)
+            except Exception as exc:
+                log.warning("repair_strms: could not delete %s: %s", strm_path, exc)
+                skipped += 1
+
+    log.info("repair_strms: scanned=%d ok=%d relinked=%d deleted=%d skipped=%d",
+             scanned, ok, relinked, deleted, skipped)
+    return {"scanned": scanned, "ok": ok, "relinked": relinked, "deleted": deleted, "skipped": skipped}
+
+
 def _self_heal_sample(sample_size: int = 10) -> None:
     """HEAD-check a random sample of existing .strm files. If a high fraction
     fail, log a warning and let the next cleanup cycle do the heavy lifting."""

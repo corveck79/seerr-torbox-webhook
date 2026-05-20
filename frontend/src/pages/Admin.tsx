@@ -137,6 +137,7 @@ export default function Admin() {
       </section>
 
       <ArrImportPanel />
+      <MaintenancePanel />
     </div>
   );
 }
@@ -292,6 +293,51 @@ function ArrImportPanel() {
         )}
 
         {msg && <div className="font-mono text-xs text-muted">{msg}</div>}
+      </div>
+    </section>
+  );
+}
+
+function MaintenancePanel() {
+  const [result, setResult] = useState<string>('');
+  const [busy, setBusy] = useState(false);
+
+  const repairStrms = async () => {
+    setBusy(true);
+    setResult('Scanning .strm files…');
+    try {
+      const r = await fetch('/ui/api/repair-strms', { method: 'POST' });
+      const data = await r.json();
+      setResult(
+        `Done — scanned: ${data.scanned}, ok: ${data.ok}, relinked: ${data.relinked}, ` +
+        `deleted+requeued: ${data.deleted}, skipped: ${data.skipped}`
+      );
+    } catch (e: any) {
+      setResult(`Error: ${e.message}`);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <section>
+      <h2 className="text-lg font-bold mb-3">Maintenance</h2>
+      <div className="bg-card rounded-lg border border-border p-4 space-y-3">
+        <div>
+          <p className="text-sm font-medium mb-1">Repair broken .strm links</p>
+          <p className="text-muted text-xs mb-2">
+            Scans movie .strm files for expired direct TorBox CDN URLs. Re-links them to a
+            catbox proxy token (if available) or deletes and requeues for reprocessing.
+          </p>
+          <button
+            onClick={repairStrms}
+            disabled={busy}
+            className="px-3 py-1.5 rounded bg-accent text-sm font-semibold disabled:opacity-50"
+          >
+            {busy ? 'Scanning…' : '🔧 Repair broken strm files'}
+          </button>
+        </div>
+        {result && <div className="font-mono text-xs text-muted border-t border-border pt-2">{result}</div>}
       </div>
     </section>
   );

@@ -667,6 +667,18 @@ def api_generate_nfos():
     return jsonify(ok=True, started="generate_nfos")
 
 
+@app.post("/ui/api/repair-strms")
+@_csrf.exempt
+def ui_api_repair_strms():
+    """Scan movie .strm files for expired direct TorBox CDN URLs and repair them.
+    Files with a catbox token → left alone. Files with a direct URL:
+      - if a virtual_item exists for that imdb_id → rewrite to catbox proxy URL
+      - otherwise → delete the .strm and immediately requeue via processor
+    """
+    result = strm_generator.repair_expired_strms(media_type="movie")
+    return jsonify(**result)
+
+
 # ── New JSON APIs ─────────────────────────────────────────────────────────────
 
 @app.get("/ui/api/health")

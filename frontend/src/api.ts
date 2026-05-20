@@ -174,6 +174,12 @@ export const api = {
   failedRequests: () => http<{ items: any[] }>('/ui/api/requests/failed'),
   retryRequest: (id: number) =>
     http<{ ok: boolean; title?: string }>(`/ui/api/requests/${id}/retry`, { method: 'POST' }),
+
+  // Maintenance
+  repairStrms: () =>
+    http<{ scanned: number; ok: number; relinked: number; deleted: number; skipped: number }>(
+      '/ui/api/repair-strms', { method: 'POST' }
+    ),
 };
 
 // Image helpers — TMDB image CDN

@@ -743,6 +743,21 @@ def get_all_virtual_items() -> list[dict]:
         return [dict(r) for r in rows]
 
 
+def get_virtual_items_by_imdb(imdb_id: str, media_type: str | None = None) -> list[dict]:
+    with _connect() as conn:
+        if media_type:
+            rows = conn.execute(
+                "SELECT * FROM virtual_items WHERE imdb_id=? AND media_type=? ORDER BY created_at DESC",
+                (imdb_id, media_type),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT * FROM virtual_items WHERE imdb_id=? ORDER BY created_at DESC",
+                (imdb_id,),
+            ).fetchall()
+        return [dict(r) for r in rows]
+
+
 def update_virtual_torbox_id(token: str, torbox_id: int | None) -> None:
     with _connect() as conn:
         conn.execute("UPDATE virtual_items SET torbox_id=? WHERE token=?", (torbox_id, token))
