@@ -12,7 +12,7 @@ import torbox
 import torrentio
 import zilean
 import settings as _settings
-from config import MEDIA_PATH, MAX_RETRY_ATTEMPTS
+from config import MEDIA_PATH
 
 log = logging.getLogger(__name__)
 
@@ -122,8 +122,12 @@ def run_series_check() -> None:
         _sync_wanted(imdb_id, tmdb_id, title, seasons)
         db.update_monitored_series(series["id"])
 
-    # Retry wanted episodes
-    for ep in db.get_wanted_episodes(max_attempts=MAX_RETRY_ATTEMPTS):
+    # Retry wanted episodes — keep watching indefinitely (like Radarr/Sonarr).
+    # Quota-aware: stop the round when the TorBox createtorrent budget is low so
+    # a big backlog doesn't trip the 60/hour limit.
+    import processor
+    wanted = db.get_wanted_episodes(max_attempts=10_000)
+    for ep in wanted:
         air_date = ep.get("air_date")
         if air_date and air_date > today:
             db.mark_episode_status(ep["imdb_id"], ep["season"], ep["episode"], "not_aired")
@@ -131,12 +135,24 @@ def run_series_check() -> None:
         if strm_exists_episode(ep["title"], ep["season"], ep["episode"]):
             db.mark_episode_status(ep["imdb_id"], ep["season"], ep["episode"], "found")
             continue
-        _retry_episode(ep)
+        usage = torbox.createtorrent_usage()
+        if usage["count"] >= torbox._CREATETORRENT_LIMIT - 2:
+            log.info("Monitor: createtorrent budget low (%d/%d) — pausing episode retries",
+                     usage["count"], torbox._CREATETORRENT_LIMIT)
+            break
+        try:
+            _retry_episode(ep)
+        except processor.RateLimited:
+            log.info("Monitor: rate limited — pausing episode retries until next run")
+            break
 
     log.info("Monitor: series check complete")
 
 
-def _retry_episode(ep: dict) -> None:
+def _retry_episode(ep: dict) -> bool:
+    """Search + add one episode. Returns True if added. Raises processor.RateLimited
+    when the TorBox createtorrent budget is gone (so the caller can pause)."""
+    import processor
     imdb_id, title, season, episode = ep["imdb_id"], ep["title"], ep["season"], ep["episode"]
     log.info("Monitor: searching %s S%02dE%02d (attempt %d)", title, season, episode, ep["attempt_count"] + 1)
     db.increment_episode_attempt(ep["id"])
@@ -149,19 +165,38 @@ def _retry_episode(ep: dict) -> None:
 
     candidates = torrentio.rank_streams(streams)
     if not candidates:
-        log.info("Monitor: no candidates for %s S%02dE%02d", title, season, episode)
-        return
+        log.info("Monitor: no acceptable candidates for %s S%02dE%02d (still wanted)",
+                 title, season, episode)
+        return False
 
     cached_hashes = torbox.check_cached([s.info_hash for s in candidates])
     ordered = [s for s in candidates if s.info_hash in cached_hashes] or candidates[:1]
     for stream in ordered:
+        # Skip createtorrent if already in the TorBox library.
+        existing = torbox.find_by_hash(stream.info_hash)
+        if existing and torbox._is_ready(existing):
+            log.info("Monitor: %s S%02dE%02d already in TorBox library", title, season, episode)
+            return True
         try:
-            torbox.add_magnet(stream.magnet, reason="seerr-sync")
+            torbox.add_magnet(stream.magnet, reason="series-monitor")
             torbox.wait_until_ready(stream.info_hash)
             log.info("Monitor: added %s S%02dE%02d", title, season, episode)
-            return
+            return True
+        except torbox.RateLimited:
+            raise processor.RateLimited()
         except Exception as exc:
+            if "429" in str(exc):
+                raise processor.RateLimited()
             log.warning("Monitor: failed to add %s S%02dE%02d: %s", title, season, episode, exc)
+
+    # TorBox couldn't serve it — try RealDebrid (no createtorrent limit).
+    rd_winner = processor._try_realdebrid_fallback(
+        title, candidates, media_type="episode", season=season, episode=episode,
+    )
+    if rd_winner:
+        log.info("Monitor: served %s S%02dE%02d via RealDebrid", title, season, episode)
+        return True
+    return False
 
 
 def search_episode_now(imdb_id: str, title: str, season: int, episode: int) -> bool:
