@@ -90,13 +90,28 @@ def generate_all() -> dict:
         for folder in movies_dir.iterdir():
             if not folder.is_dir():
                 continue
+            nfo_path = folder / f"{folder.name}.nfo"
+            if nfo_path.exists():
+                continue
             imdb_id = items_by_title.get(folder.name)
             if not imdb_id or imdb_id.startswith("unknown_"):
-                continue
+                # Not in DB — try TMDB lookup so metadata + posters are fetched
+                clean = _clean_for_tmdb(folder.name)
+                if not clean:
+                    continue
+                m_yr = _YEAR_RE.search(folder.name)
+                year_hint = int(m_yr.group(1)) if m_yr else None
+                try:
+                    imdb_id = tmdb.search_movie(clean, year_hint)
+                    time.sleep(0.2)
+                except Exception:
+                    imdb_id = None
+                if not imdb_id:
+                    continue
             m = _YEAR_RE.search(folder.name)
             year = int(m.group(1)) if m else None
             title = _YEAR_RE.sub("", folder.name).strip() if m else folder.name
-            if _write(folder / f"{folder.name}.nfo", _movie_nfo(title, year, imdb_id)):
+            if _write(nfo_path, _movie_nfo(title, year, imdb_id)):
                 movies += 1
 
     series_dir = media / "series"

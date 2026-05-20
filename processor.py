@@ -165,7 +165,8 @@ def _lazy_register_movie(req: MediaRequest, candidates: list) -> Optional[Torren
                 year = int((results[0].get("release_date") or "0000")[:4]) or None
         except Exception:
             year = None
-    if strm_generator.create_lazy_movie_strm(winner.info_hash, winner.magnet, req.title, year):
+    if strm_generator.create_lazy_movie_strm(winner.info_hash, winner.magnet, req.title, year,
+                                              imdb_id=req.imdb_id, tmdb_id=getattr(req, 'tmdb_id', None)):
         log.info("Lazy-registered movie %s (cached=%s) — createtorrent deferred to first play",
                  req.title, winner.info_hash in cached_hashes)
         return winner
@@ -412,7 +413,9 @@ def _process_locked(req: MediaRequest, _retry_attempt: int) -> bool:
         item = torbox.find_by_hash(winner.info_hash) if winner else None
         torrent_id = item.get('id') if item else None
         if torrent_id:
-            strm_generator.create_strm_for_torrent(torrent_id, req.title, req.media_type)
+            strm_generator.create_strm_for_torrent(torrent_id, req.title, req.media_type,
+                                                    imdb_id=req.imdb_id,
+                                                    tmdb_id=getattr(req, 'tmdb_id', None))
         # RD fallback already wrote its .strm before returning; nothing to do here.
             # Best-effort subtitle fetch
             try:

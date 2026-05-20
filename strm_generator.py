@@ -145,8 +145,51 @@ def _extract_year(name: str) -> int | None:
     return int(m.group(1)) if m else None
 
 
+def _write_nfo(strm_path: Path, imdb_id: str | None, tmdb_id: int | None = None,
+               media_type: str = "movie") -> None:
+    """Write a Kodi/Jellyfin NFO sidecar next to a .strm file.
+    Jellyfin reads the IMDb/TMDB uniqueid to fetch metadata + posters directly,
+    bypassing unreliable name-matching against the folder name."""
+    if not imdb_id and not tmdb_id:
+        return
+    nfo_path = strm_path.with_suffix(".nfo")
+    if nfo_path.exists():
+        return
+    m = _YEAR_RE.search(strm_path.parent.name)
+    year = int(m.group(1)) if m else None
+    title = _YEAR_RE.sub("", strm_path.parent.name).strip() if m else strm_path.parent.name
+
+    if media_type == "movie":
+        year_tag = f"\n  <year>{year}</year>" if year else ""
+        uid_tags = ""
+        if imdb_id:
+            uid_tags += f'  <uniqueid type="imdb" default="true">{imdb_id}</uniqueid>\n'
+        if tmdb_id:
+            uid_tags += f'  <uniqueid type="tmdb">{tmdb_id}</uniqueid>\n'
+        content = (
+            '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'
+            f"<movie>\n  <title>{title}</title>{year_tag}\n{uid_tags}</movie>\n"
+        )
+    else:
+        uid_tags = ""
+        if imdb_id:
+            uid_tags += f'  <uniqueid type="imdb" default="true">{imdb_id}</uniqueid>\n'
+        if tmdb_id:
+            uid_tags += f'  <uniqueid type="tmdb">{tmdb_id}</uniqueid>\n'
+        content = (
+            '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'
+            f"<tvshow>\n  <title>{title}</title>\n{uid_tags}</tvshow>\n"
+        )
+    try:
+        nfo_path.write_text(content, encoding="utf-8")
+        log.info("Wrote NFO: %s", nfo_path)
+    except Exception as exc:
+        log.warning("Could not write NFO %s: %s", nfo_path, exc)
+
+
 def create_lazy_movie_strm(info_hash: str, magnet: str, title: str,
-                            year: int | None) -> bool:
+                            year: int | None, imdb_id: str | None = None,
+                            tmdb_id: int | None = None) -> bool:
     """Write a Catbox virtual movie .strm WITHOUT adding the torrent to TorBox.
     createtorrent is deferred until first playback (see catbox.materialize).
     Returns True if a new .strm was written."""
@@ -164,7 +207,10 @@ def create_lazy_movie_strm(info_hash: str, magnet: str, title: str,
         file_id=None,
         strm_path=str(path),
     )
-    return _write_strm(path, catbox.proxy_url(token))
+    written = _write_strm(path, catbox.proxy_url(token))
+    if written and (imdb_id or tmdb_id):
+        _write_nfo(path, imdb_id, tmdb_id)
+    return written
 
 
 def _norm_title(s: str) -> str:
@@ -276,7 +322,8 @@ def process_torrent(item: dict) -> int:
     return written
 
 
-def create_strm_for_torrent(torrent_id: int, title: str, media_type: str) -> int:
+def create_strm_for_torrent(torrent_id: int, title: str, media_type: str,
+                             imdb_id: str | None = None, tmdb_id: int | None = None) -> int:
     """
     Immediately create .strm file(s) for a just-added torrent.
     For movies: uses file_id=0 (fast, ~1 API call).
@@ -302,7 +349,10 @@ def create_strm_for_torrent(torrent_id: int, title: str, media_type: str) -> int
         url = _resolve_url(item, main_file['id'], main_file.get('name', ''), info, 'movie')
         if not url:
             return 0
-        return 1 if _write_strm(path, url) else 0
+        written = _write_strm(path, url)
+        if written and (imdb_id or tmdb_id):
+            _write_nfo(path, imdb_id, tmdb_id)
+        return 1 if written else 0
 
     return process_torrent(item)
 
