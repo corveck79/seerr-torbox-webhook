@@ -311,7 +311,26 @@ def _search_best_cached_release(item: dict) -> tuple[str, str] | None:
     Returns (info_hash, magnet) of the top ranked cached result, or None."""
     imdb_id = item.get("imdb_id")
     if not imdb_id:
-        log.info("Catbox search: no imdb_id for %s — cannot search", item["title"])
+        # Try to resolve imdb_id from TMDB using title + year, then persist it.
+        try:
+            import tmdb as _tmdb
+            kind = "movie" if item.get("media_type") == "movie" else "tv"
+            title = item.get("title") or ""
+            year = item.get("year")
+            results = _tmdb._get("/search/" + ("movie" if kind == "movie" else "tv"),
+                                  params={"query": title, "year": year or ""}) or {}
+            hits = results.get("results") or []
+            if hits:
+                tmdb_id = hits[0]["id"]
+                imdb_id = _tmdb.tmdb_to_imdb(tmdb_id, media_type=kind)
+                if imdb_id:
+                    db.update_virtual_item_imdb(item["token"], imdb_id)
+                    log.info("Catbox search: resolved imdb_id %s for %s via TMDB",
+                             imdb_id, title)
+        except Exception as exc:
+            log.warning("Catbox search: TMDB lookup failed for %s: %s", item.get("title"), exc)
+    if not imdb_id:
+        log.warning("Catbox search: no imdb_id for %s — cannot search", item["title"])
         return None
     try:
         import torrentio

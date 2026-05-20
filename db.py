@@ -770,6 +770,12 @@ def update_virtual_file_id(token: str, file_id: int) -> None:
         conn.commit()
 
 
+def update_virtual_item_imdb(token: str, imdb_id: str) -> None:
+    with _connect() as conn:
+        conn.execute("UPDATE virtual_items SET imdb_id=? WHERE token=?", (imdb_id, token))
+        conn.commit()
+
+
 def touch_virtual_item(token: str) -> None:
     with _connect() as conn:
         conn.execute(
