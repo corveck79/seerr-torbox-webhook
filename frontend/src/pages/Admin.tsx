@@ -232,25 +232,29 @@ function Toggle({ on, onClick }: { on: boolean; onClick: () => void }) {
 }
 
 function ArrImportPanel() {
-  const [status, setStatus] = useState<string>('');
+  const [msg, setMsg] = useState<string>('');
+  const { data: s } = useQuery({
+    queryKey: ['arr-import-status'],
+    queryFn: api.arrStatus,
+    refetchInterval: (q) => (q.state.data?.running ? 1000 : 5000),
+  });
   const test = async (kind: 'radarr' | 'sonarr') => {
+    setMsg(`Testing ${kind}…`);
     try {
       const r = await api.arrTest(kind);
-      setStatus(r.ok ? `✓ ${kind} reachable` : `✗ ${kind} unreachable`);
+      setMsg(r.ok ? `✓ ${kind} reachable` : `✗ ${kind} unreachable${r.error ? ': ' + r.error : ''}`);
     } catch (e: any) {
-      setStatus(`✗ ${e.message}`);
+      setMsg(`✗ ${e.message}`);
     }
   };
   const run = async (kind: 'radarr' | 'sonarr') => {
     if (!confirm(`Start ${kind} import?`)) return;
+    setMsg('');
     await api.arrRun(kind);
-    setStatus(`Started ${kind} import…`);
-    const poll = setInterval(async () => {
-      const s = await api.arrStatus();
-      setStatus(`${s.kind || '—'}: ${s.message} [${s.done}/${s.total}, +${s.added} ⏭${s.skipped} ✗${s.errors}]`);
-      if (!s.running) clearInterval(poll);
-    }, 2000);
   };
+
+  const pct = s && s.total > 0 ? Math.round((s.done / s.total) * 100) : 0;
+
   return (
     <section>
       <h2 className="text-lg font-bold mb-3">Radarr / Sonarr import</h2>
@@ -260,11 +264,34 @@ function ArrImportPanel() {
         </p>
         <div className="flex gap-2 flex-wrap mb-3">
           <button onClick={() => test('radarr')} className="px-3 py-1.5 rounded border border-border text-sm hover:bg-bg">Test Radarr</button>
-          <button onClick={() => run('radarr')} className="px-3 py-1.5 rounded bg-accent text-sm font-semibold">▶ Import Radarr</button>
+          <button onClick={() => run('radarr')} disabled={s?.running} className="px-3 py-1.5 rounded bg-accent text-sm font-semibold disabled:opacity-50">▶ Import Radarr</button>
           <button onClick={() => test('sonarr')} className="px-3 py-1.5 rounded border border-border text-sm hover:bg-bg">Test Sonarr</button>
-          <button onClick={() => run('sonarr')} className="px-3 py-1.5 rounded bg-accent text-sm font-semibold">▶ Import Sonarr</button>
+          <button onClick={() => run('sonarr')} disabled={s?.running} className="px-3 py-1.5 rounded bg-accent text-sm font-semibold disabled:opacity-50">▶ Import Sonarr</button>
         </div>
-        <div className="font-mono text-xs text-muted">{status}</div>
+
+        {s && (s.running || s.total > 0) && (
+          <div className="mb-3">
+            <div className="flex justify-between text-xs text-muted mb-1">
+              <span>
+                {s.running ? `Importing ${s.kind}…` : `Finished ${s.kind || ''}`} — {s.message}
+              </span>
+              <span>{s.done}/{s.total} ({pct}%)</span>
+            </div>
+            <div className="w-full h-2 bg-bg rounded overflow-hidden">
+              <div
+                className={`h-full transition-all ${s.running ? 'bg-accent' : 'bg-ok'}`}
+                style={{ width: `${pct}%` }}
+              />
+            </div>
+            <div className="flex gap-4 text-xs text-muted mt-1">
+              <span className="text-ok">+{s.added} added</span>
+              <span>⏭ {s.skipped} skipped</span>
+              <span className="text-red-400">✗ {s.errors} errors</span>
+            </div>
+          </div>
+        )}
+
+        {msg && <div className="font-mono text-xs text-muted">{msg}</div>}
       </div>
     </section>
   );
