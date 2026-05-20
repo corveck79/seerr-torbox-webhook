@@ -7,3 +7,6 @@ __pycache__/
 frontend/node_modules/
 frontend/dist/
 static/app/
+# Runtime data — DB, media, .strm files, backups. NEVER track these: a
+# `git reset --hard` would otherwise wipe the live database.
+data/
