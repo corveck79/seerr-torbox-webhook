@@ -551,16 +551,21 @@ def run_and_refresh() -> None:
 
 
 def repair_expired_strms(media_type: str = "movie") -> dict:
-    """Find .strm files containing expired direct-CDN URLs and repair them.
+    """Find .strm files with broken or missing catbox tokens and repair them.
 
-    A .strm is considered broken when its URL is NOT a catbox proxy URL
-    (i.e. doesn't route through /stream/<token>).  For each broken file:
+    Two kinds of breakage:
+    1. Direct TorBox CDN URL (not a catbox proxy) — expired after ~24h.
+    2. Catbox proxy URL whose token is NOT in virtual_items DB — 404 on play.
+
+    For each broken file:
       1. Read imdb_id from the .nfo sidecar.
-      2. If a virtual_item already exists for that imdb_id → rewrite the
-         .strm to point at the catbox proxy URL.
-      3. Otherwise → delete the .strm so the next processor run recreates it.
+      2. If a virtual_item exists for that imdb_id → rewrite the .strm to
+         point at the correct catbox proxy URL.
+      3. Otherwise → delete the .strm and immediately requeue via processor.
     Returns a summary dict with counts.
     """
+    import re as _re
+    import catbox as _catbox
     from config import CATBOX_HOST
     catbox_base = CATBOX_HOST.rstrip("/") + "/stream/"
 
@@ -568,9 +573,10 @@ def repair_expired_strms(media_type: str = "movie") -> dict:
     sub = "movies" if media_type == "movie" else "series"
     folder = media / sub
     if not folder.is_dir():
-        return {"scanned": 0, "ok": 0, "relinked": 0, "deleted": 0, "skipped": 0}
+        return {"scanned": 0, "ok": 0, "relinked": 0, "deleted": 0, "skipped": 0,
+                "orphaned_tokens": 0}
 
-    scanned = ok = relinked = deleted = skipped = 0
+    scanned = ok = relinked = deleted = skipped = orphaned = 0
 
     for strm_path in folder.rglob("*.strm"):
         scanned += 1
@@ -580,10 +586,16 @@ def repair_expired_strms(media_type: str = "movie") -> dict:
             skipped += 1
             continue
 
-        # Already a valid catbox proxy URL — nothing to do.
+        # Catbox proxy URL — verify the token actually exists in virtual_items.
         if url.startswith(catbox_base):
-            ok += 1
-            continue
+            m = _re.search(r"/stream/([a-f0-9]{16})$", url)
+            token = m.group(1) if m else None
+            if token and db.get_virtual_item(token):
+                ok += 1
+                continue
+            # Token missing from DB — treat as broken (fall through to repair).
+            orphaned += 1
+            log.warning("repair_strms: orphaned token %s in %s — repairing", token, strm_path.name)
 
         # Direct TorBox URL (or any non-proxy URL) — needs repair.
         movie_folder = strm_path.parent
@@ -641,9 +653,10 @@ def repair_expired_strms(media_type: str = "movie") -> dict:
                 log.warning("repair_strms: could not delete %s: %s", strm_path, exc)
                 skipped += 1
 
-    log.info("repair_strms: scanned=%d ok=%d relinked=%d deleted=%d skipped=%d",
-             scanned, ok, relinked, deleted, skipped)
-    return {"scanned": scanned, "ok": ok, "relinked": relinked, "deleted": deleted, "skipped": skipped}
+    log.info("repair_strms: scanned=%d ok=%d orphaned=%d relinked=%d deleted=%d skipped=%d",
+             scanned, ok, orphaned, relinked, deleted, skipped)
+    return {"scanned": scanned, "ok": ok, "orphaned_tokens": orphaned,
+            "relinked": relinked, "deleted": deleted, "skipped": skipped}
 
 
 def _self_heal_sample(sample_size: int = 10) -> None:

@@ -308,9 +308,15 @@ function MaintenancePanel() {
     try {
       const r = await fetch('/ui/api/repair-strms', { method: 'POST' });
       const data = await r.json();
+      const orphaned = data.orphaned_tokens ?? 0;
       setResult(
-        `Done — scanned: ${data.scanned}, ok: ${data.ok}, relinked: ${data.relinked}, ` +
-        `deleted+requeued: ${data.deleted}, skipped: ${data.skipped}`
+        `Done — scanned: ${data.scanned}, ok: ${data.ok}` +
+        (orphaned > 0 ? `, orphaned tokens fixed: ${orphaned}` : '') +
+        (data.relinked > 0 ? `, relinked: ${data.relinked}` : '') +
+        (data.deleted > 0 ? `, deleted+requeued: ${data.deleted}` : '') +
+        (data.skipped > 0 ? `, skipped: ${data.skipped}` : '') +
+        ((orphaned === 0 && data.relinked === 0 && data.deleted === 0)
+          ? ' — all links look good' : '')
       );
     } catch (e: any) {
       setResult(`Error: ${e.message}`);

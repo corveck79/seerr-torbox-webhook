@@ -177,7 +177,7 @@ export const api = {
 
   // Maintenance
   repairStrms: () =>
-    http<{ scanned: number; ok: number; relinked: number; deleted: number; skipped: number }>(
+    http<{ scanned: number; ok: number; orphaned_tokens: number; relinked: number; deleted: number; skipped: number }>(
       '/ui/api/repair-strms', { method: 'POST' }
     ),
 };
