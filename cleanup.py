@@ -566,6 +566,16 @@ def rename_messy_series_folders() -> int:
 
         canonical_title = monitored.get(imdb_id)
         if not canonical_title:
+            # Not in monitored_series — ask TMDB for the official title
+            try:
+                tmdb_id = tmdb.find_by_imdb(imdb_id, kind="tv")
+                if tmdb_id:
+                    info = tmdb.get_show_info(tmdb_id)
+                    canonical_title = (info or {}).get("name") or None
+                time.sleep(0.15)
+            except Exception:
+                pass
+        if not canonical_title:
             continue
 
         import strm_generator as _sg
