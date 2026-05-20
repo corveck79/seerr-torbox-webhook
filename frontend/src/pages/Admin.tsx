@@ -268,6 +268,17 @@ function ArrImportPanel() {
           <button onClick={() => run('radarr')} disabled={s?.running} className="px-3 py-1.5 rounded bg-accent text-sm font-semibold disabled:opacity-50">▶ Import Radarr</button>
           <button onClick={() => test('sonarr')} className="px-3 py-1.5 rounded border border-border text-sm hover:bg-bg">Test Sonarr</button>
           <button onClick={() => run('sonarr')} disabled={s?.running} className="px-3 py-1.5 rounded bg-accent text-sm font-semibold disabled:opacity-50">▶ Import Sonarr</button>
+          <button
+            onClick={async () => {
+              if (!confirm('Import all Sonarr series + search for all episodes and create .strm files. This runs in the background and may take a while. Continue?')) return;
+              setMsg('Series backfill started — runs in background, check logs for progress…');
+              await fetch('/ui/api/series-backfill', { method: 'POST' });
+            }}
+            disabled={s?.running}
+            className="px-3 py-1.5 rounded bg-accent text-sm font-semibold disabled:opacity-50"
+          >
+            ▶ Sync all series + episodes
+          </button>
         </div>
 
         {s && (s.running || s.total > 0) && (

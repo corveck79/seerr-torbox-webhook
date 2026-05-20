@@ -141,9 +141,9 @@ def run_series_check() -> None:
         db.update_monitored_series(series["id"])
 
     # Retry wanted episodes — keep watching indefinitely (like Radarr/Sonarr).
-    # Quota-aware: stop the round when the TorBox createtorrent budget is low so
-    # a big backlog doesn't trip the 60/hour limit.
+    # In catbox mode no TorBox quota is consumed so we never pause for budget.
     import processor
+    catbox_mode = _settings.get("CATBOX_MODE", False)
     wanted = db.get_wanted_episodes(max_attempts=10_000)
     for ep in wanted:
         air_date = ep.get("air_date")
@@ -153,11 +153,12 @@ def run_series_check() -> None:
         if strm_exists_episode(ep["title"], ep["season"], ep["episode"]):
             db.mark_episode_status(ep["imdb_id"], ep["season"], ep["episode"], "found")
             continue
-        usage = torbox.createtorrent_usage()
-        if usage["count"] >= torbox._CREATETORRENT_LIMIT - 2:
-            log.info("Monitor: createtorrent budget low (%d/%d) — pausing episode retries",
-                     usage["count"], torbox._CREATETORRENT_LIMIT)
-            break
+        if not catbox_mode:
+            usage = torbox.createtorrent_usage()
+            if usage["count"] >= torbox._CREATETORRENT_LIMIT - 2:
+                log.info("Monitor: createtorrent budget low (%d/%d) — pausing episode retries",
+                         usage["count"], torbox._CREATETORRENT_LIMIT)
+                break
         try:
             _retry_episode(ep)
         except processor.RateLimited:
@@ -165,6 +166,27 @@ def run_series_check() -> None:
             break
 
     log.info("Monitor: series check complete")
+
+
+def run_series_backfill() -> dict:
+    """Import all series from Sonarr, then run a full series check to create .strm files.
+    Combines import_sonarr + run_series_check in one shot.
+    Returns a summary dict."""
+    import arr_import
+    summary: dict = {"import": {}, "check": "done"}
+    try:
+        result = arr_import.import_sonarr(only_monitored=True)
+        summary["import"] = {
+            "added": result.get("added", 0),
+            "skipped": result.get("skipped", 0),
+            "errors": result.get("errors", 0),
+        }
+        log.info("run_series_backfill: sonarr import done — %s", summary["import"])
+    except Exception as exc:
+        log.error("run_series_backfill: sonarr import failed: %s", exc)
+        summary["import"] = {"error": str(exc)}
+    run_series_check()
+    return summary
 
 
 def _retry_episode(ep: dict) -> bool:
@@ -186,6 +208,29 @@ def _retry_episode(ep: dict) -> bool:
         log.info("Monitor: no acceptable candidates for %s S%02dE%02d (still wanted)",
                  title, season, episode)
         return False
+
+    # In catbox mode: write a lazy .strm for the best cached release.
+    # TorBox add is deferred until first playback — no quota consumed here.
+    if _settings.get("CATBOX_MODE", False):
+        cached_hashes = torbox.check_cached([s.info_hash for s in candidates])
+        best = next((s for s in candidates if s.info_hash in cached_hashes), None)
+        if not best:
+            log.info("Monitor: no cached release for %s S%02dE%02d — still wanted",
+                     title, season, episode)
+            return False
+        import strm_generator
+        written = strm_generator.create_lazy_episode_strm(
+            info_hash=best.info_hash,
+            magnet=best.magnet,
+            title=title,
+            season=season,
+            episode=episode,
+            imdb_id=imdb_id,
+        )
+        if written:
+            db.mark_episode_status(imdb_id, season, episode, "found")
+            log.info("Monitor: lazy strm created for %s S%02dE%02d", title, season, episode)
+        return bool(written)
 
     cached_hashes = torbox.check_cached([s.info_hash for s in candidates])
     ordered = [s for s in candidates if s.info_hash in cached_hashes] or candidates[:1]

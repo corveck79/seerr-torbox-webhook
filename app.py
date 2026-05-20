@@ -703,6 +703,14 @@ def ui_api_cleanup_duplicate_strms():
     return jsonify(**result)
 
 
+@app.post("/ui/api/series-backfill")
+@_csrf.exempt
+def ui_api_series_backfill():
+    """Import all Sonarr series + run series check to create .strm files for all episodes."""
+    threading.Thread(target=monitor.run_series_backfill, name="series-backfill", daemon=True).start()
+    return jsonify(ok=True, started="series_backfill")
+
+
 # ── New JSON APIs ─────────────────────────────────────────────────────────────
 
 @app.get("/ui/api/health")
