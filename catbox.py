@@ -603,16 +603,21 @@ def _search_best_cached_release(item: dict) -> tuple[str, str] | None | object:
         import zilean as _zilean
         streams: list = []
         if _settings.get("ZILEAN_ENABLED", False):
-            streams = _zilean.fetch_streams(imdb_id, season=season, episode=episode)
+            zilean_streams = _zilean.fetch_streams(imdb_id, season=season, episode=episode)
             log.info("Catbox search: Zilean returned %d stream(s) for %s (%s)",
-                     len(streams), item.get("title"), imdb_id)
-        if not streams:
-            streams = torrentio.fetch_streams(
-                "movie" if media_type == "movie" else "series",
-                imdb_id, season=season, episode=episode,
-            )
+                     len(zilean_streams), item.get("title"), imdb_id)
+            streams = zilean_streams
+        torrentio_streams = torrentio.fetch_streams(
+            "movie" if media_type == "movie" else "series",
+            imdb_id, season=season, episode=episode,
+        )
         log.info("Catbox search: Torrentio returned %d stream(s) for %s (%s)",
-                 len(streams), item.get("title"), imdb_id)
+                 len(torrentio_streams), item.get("title"), imdb_id)
+        # Merge: add Torrentio entries not already in Zilean (dedup by info_hash)
+        seen_hashes = {s.info_hash for s in streams}
+        streams += [s for s in torrentio_streams if s.info_hash not in seen_hashes]
+        log.info("Catbox search: %d stream(s) total after merge for %s",
+                 len(streams), item.get("title"))
         if not streams:
             return None
         ranked = torrentio.rank_streams(streams)
