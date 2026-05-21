@@ -66,7 +66,7 @@ AUDIO_LANGUAGE_PREFERENCE = [l.strip().lower() for l in _env("AUDIO_LANGUAGE_PRE
 EXCLUDE_LANGUAGES = [l.strip().lower() for l in _env("EXCLUDE_LANGUAGES", "").split(",") if l.strip()]
 
 # How long to wait for Torbox to make the torrent available before triggering Jellyfin scan.
-TORBOX_POLL_INTERVAL_SEC = _env_int("TORBOX_POLL_INTERVAL_SEC", 10)
+TORBOX_POLL_INTERVAL_SEC = _env_int("TORBOX_POLL_INTERVAL_SEC", 2)
 TORBOX_POLL_TIMEOUT_SEC = _env_int("TORBOX_POLL_TIMEOUT_SEC", 600)
 
 WEBHOOK_SECRET = _env("WEBHOOK_SECRET", "")
