@@ -74,7 +74,8 @@ def createtorrent_usage(window_sec: int = 3600) -> dict:
     }
 
 
-_CREATETORRENT_LIMIT = 60  # TorBox: 60 createtorrent calls per hour per token
+_CREATETORRENT_LIMIT_HOUR = 60   # TorBox: 60/hour per IP
+_CREATETORRENT_LIMIT_MIN  = 10   # TorBox: 10/min edge burst limit
 
 
 class RateLimited(Exception):
@@ -84,15 +85,21 @@ class RateLimited(Exception):
 
 def add_magnet(magnet: str, timeout: int = 30, reason: str = "unknown") -> dict:
     url = f"{TORBOX_BASE_URL.rstrip('/')}/torrents/createtorrent"
-    # Client-side guard: don't burn requests we know will be 429'd. Leave a
-    # small headroom (58) so concurrent callers / clock skew don't overshoot.
-    usage = createtorrent_usage()
-    if usage["count"] >= _CREATETORRENT_LIMIT - 2:
-        log.warning("createtorrent [%s] SKIPPED — local quota %d/%d reached (resets ~%ds)",
-                    reason, usage["count"], _CREATETORRENT_LIMIT, usage["resets_in_sec"])
+    # Client-side guard: check both the 60/hour and the 10/minute edge limits.
+    usage_hour = createtorrent_usage(window_sec=3600)
+    usage_min  = createtorrent_usage(window_sec=60)
+    if usage_hour["count"] >= _CREATETORRENT_LIMIT_HOUR - 2:
+        log.warning("createtorrent [%s] SKIPPED — hourly quota %d/%d reached (resets ~%ds)",
+                    reason, usage_hour["count"], _CREATETORRENT_LIMIT_HOUR,
+                    usage_hour["resets_in_sec"])
+        raise RateLimited()
+    if usage_min["count"] >= _CREATETORRENT_LIMIT_MIN - 1:
+        log.warning("createtorrent [%s] SKIPPED — per-minute burst %d/%d reached",
+                    reason, usage_min["count"], _CREATETORRENT_LIMIT_MIN)
         raise RateLimited()
     _record_createtorrent(reason)
-    log.info("createtorrent [%s] (%d/60 this hour): %s", reason, usage["count"] + 1, magnet[:80])
+    log.info("createtorrent [%s] (%d/60h, %d/10m): %s",
+             reason, usage_hour["count"] + 1, usage_min["count"] + 1, magnet[:80])
     for _attempt in range(3):
         resp = requests.post(url, headers=_headers(), data={"magnet": magnet}, timeout=timeout)
         if resp.status_code != 429:
