@@ -1,6 +1,6 @@
 # Mycelium — Session Handoff
 
-Carry this into the next chat so context isn't lost. Last updated: 2026-05-20.
+Carry this into the next chat so context isn't lost. Last updated: 2026-05-21.
 
 ## What this project is
 
@@ -19,7 +19,7 @@ Docker container on a Synology NAS.
 
 ---
 
-## Current state (end of session 2026-05-20)
+## Current state (end of session 2026-05-21)
 
 Everything is on `main`. The NAS needs a `git pull + rebuild` to pick up recent changes.
 
@@ -31,12 +31,73 @@ docker compose up -d --build
 ```
 
 After rebuild:
-1. **Admin → Maintenance → Migrate to canonical names** — renames all movie folders to
-   TMDB canonical names, merges duplicates. Run once. *(Already ran once this session —
-   only run again if new duplicate folders appear.)*
-2. Jellyfin: **remove and re-add the Movies library** to clear stale DB entries from
-   renamed folders (normal scan adds new entries but doesn't remove old ones).
-3. Jellyfin **Scan All Libraries**
+1. **Admin → Maintenance → Clean up duplicate strm files** — removes extra `.strm` per
+   folder (fixes the 402 vs 232 Jellyfin entry count).
+2. **The Amateur**: try the new re-resolve endpoint instead of manual SQL:
+   `curl -X POST http://localhost:8088/ui/api/virtual-items/227a6d344f04441c/re-resolve`
+   The known-hash RD fast path should now resolve it.
+3. Jellyfin **Scan All Libraries**.
+
+### Multi-user context (revealed this session)
+
+Repo is **public on GitHub** and 6-8 other users run this Plex/ARR stack. This raised the
+bar on reliability: a single failed playback must NOT delete content for everyone. The
+`.strm`-on-first-miss behavior was changed accordingly (see decisions table).
+
+---
+
+## Changes this session (2026-05-21) — RD-first + stability sprint
+
+**RD as primary debrid, TorBox as fallback** (`e5d228e`)
+- `_search_best_cached_release()` now checks RealDebrid cache first, TorBox second,
+  returns `(hash, magnet, provider)` tuple.
+- `_materialize_locked` has separate RD and TorBox code paths; either can switch provider
+  if the search returns a different one.
+- `debrid.check_cached_multi()` always queries RD when configured (no feature gate).
+
+**Zilean in catbox search path** (`7cb2d08`)
+- Zilean is queried before Torrentio in `_search_best_cached_release` when `ZILEAN_ENABLED`.
+
+**Known-hash RD fast path + don't delete .strm on first miss** (`3ddb379`)
+- When `info_hash` is in the DB but Torrentio returns 0 results (e.g. The Amateur), RD is
+  checked directly for that hash before a full search. Solves "Torrentio finds nothing but
+  the torrent is cached".
+- `_remove_strm()` is no longer called on the first "no cached release" miss. Instead a 6h
+  fail cooldown is set and the .strm stays; the scheduled repair job handles real cleanup.
+  Protects the shared library from transient API failures.
+
+**Persistent playability state + structured reason codes + re-resolve** (`a138a0a` + db/catbox)
+- New `playability_state` table: `content_key` (imdb_id, or `imdb_id:SxxEyy` for episodes),
+  `status` (unknown/playable/degraded), `last_ok_provider`, `consecutive_failures`,
+  `last_fail_reason`. Survives container restarts (the in-memory `_fail_cache` does not).
+- Reason code constants in catbox.py: `TORRENTIO_EMPTY`, `NO_CACHED_RELEASE`, `RD_429`,
+  `TB_429`, `WAIT_TIMEOUT`, `NO_FILE`, `UNKNOWN_TOKEN`, `ADD_FAILED`, etc. Written to
+  `playability_state.last_fail_reason` on every failure path.
+- `POST /ui/api/virtual-items/<token>/re-resolve`: clears in-memory + persistent fail
+  state, triggers fresh materialize (50s timeout). Replaces manual SQL debugging.
+- `GET /ui/api/playability-state`: lists degraded items with 3+ consecutive failures.
+
+**Series backfill via lazy .strm** (`52c5647`)
+- `monitor.run_series_backfill()` chains `arr_import.import_sonarr()` + `run_series_check()`.
+- In catbox mode `_retry_episode` writes a lazy `.strm` (token only) instead of eagerly
+  adding to TorBox — no quota consumed until someone actually plays.
+- Admin "▶ Sync all series + episodes" button → `POST /ui/api/series-backfill`.
+
+**Duplicate .strm fix** (`971d53e`)
+- `_do_rename` now renames internal `{stem}.strm`/`.nfo` files when a folder is renamed.
+- `cleanup_duplicate_strms()` keeps the .strm matching the folder name, removes the rest.
+- Admin "Clean up duplicate strm files" button → `POST /ui/api/cleanup-duplicate-strms`.
+
+### Codex refactor plan — what was adopted vs skipped
+
+The full Codex plan (provider health scoring, playback_events audit table, processor
+preflight, frontend status badges, full uniform provider contract) was assessed as
+mostly overkill for an 6-8 user setup. **Adopted** the high-value subset: persistent
+`playability_state`, structured reason codes, and the re-resolve admin endpoint.
+**Skipped/deferred**: health-score-based provider selection (RD-first is deterministic
+enough), `playback_events` audit table (logs+Prometheus cover it), frontend badges.
+A "Re-resolve" button per degraded item in `Admin.tsx` is the next obvious UI add (not
+yet built — backend endpoints are live).
 
 ---
 
@@ -49,13 +110,17 @@ User → SPA (/app/) or Seerr webhook → processor.py
   → catbox.register() → write .strm + .nfo + poster.jpg + fanart.jpg
   → Jellyfin refresh
 
-On play (catbox mode):
-  Jellyfin reads .strm → opens http://10.0.0.10:8088/stream/<token>
-  → catbox.materialize(token):
-      1. torbox_id in DB still live? → requestdl → 302 redirect (fast path)
-      2. Not live? → fresh Torrentio search → pick best cached release
-         → add_magnet → wait_until_ready → requestdl → 302 redirect
-      3. Nothing found? → remove .strm → film verdwijnt uit Jellyfin
+On play (catbox mode), catbox.materialize(token) — provider-aware:
+  RD path (debrid_provider='realdebrid'):
+      1. rd_id still downloaded in RD? → get URL → 302 redirect (fast path)
+      2. Else → fresh search (RD-first) → add_magnet → wait_until_ready → URL
+  TorBox path (default):
+      1. torbox_id still live? → requestdl → 302 redirect (fast path)
+      2. Else known info_hash in TorBox library? → use it
+      3. Else known info_hash cached on RD? → switch to RD, add, serve
+      4. Else fresh Zilean+Torrentio search (RD-first, TB fallback) → add → serve
+  On miss: 6h cooldown + playability_state='degraded'; .strm KEPT (repair job
+           cleans up truly-dead items later). reason_code recorded.
 ```
 
 **Core invariant (imdb_id is leading):**
@@ -81,7 +146,10 @@ On play (catbox mode):
 | **_SEARCH_UNAVAILABLE sentinel** | Distinguishes "searched and found nothing" (→ remove .strm) from "couldn't search" (→ keep .strm, retry later). |
 | **Shared maintenance lock** | `migrate_to_canonical_names` and `repair_expired_strms` cannot run simultaneously — rename + repair would conflict. |
 | **Auto repair every 6h** | Scheduled job recreates missing .strm files automatically; no manual repair needed. |
-| **Dead .strm removal** | If materialize fails definitively, .strm is deleted so Jellyfin stops showing an unplayable film. |
+| **Keep .strm on first miss** | (Changed 2026-05-21) Shared library with 6-8 users — a single failed playback must not delete content for everyone. First miss → 6h cooldown + degraded state; only repair job removes truly-dead items. |
+| **RD-first, TB fallback** | TorBox CDN links were observed failing in Stremio while RD links worked. RD is now primary; TB is fallback. |
+| **Known-hash RD check** | Torrentio returns 0 results for some films (The Amateur) even though the torrent is RD-cached. Check the stored hash against RD directly before a full search. |
+| **Persistent playability_state** | In-memory fail cache resets on restart → Jellyfin scan re-hammers RD/TB. DB-backed state survives restarts and powers the re-resolve / degraded-items endpoints. |
 | **Jellyfin NFO saver = OFF** | Mycelium writes .nfo with imdb_id. Jellyfin NFO saver would overwrite them. |
 
 ---
@@ -136,16 +204,33 @@ On play (catbox mode):
 | `magnet` | Stored but no longer blindly re-added (only used if torbox_id/hash shortcut works) |
 | `strm_path` | Path on disk — updated by `update_virtual_strm_path_prefix()` on rename |
 | `last_played` | Used by idle GC (`release_idle()`) |
+| `debrid_provider` | `'torbox'` (default) or `'realdebrid'` — which path materialize uses |
+| `rd_id` | RealDebrid torrent id — fast path for the RD provider |
+
+### playability_state table (added 2026-05-21)
+
+| Column | Role |
+|--------|------|
+| `content_key` | `imdb_id` (movie) or `imdb_id:SxxEyy` (episode) — primary key |
+| `status` | `unknown` / `playable` / `degraded` |
+| `last_ok_provider` | `torbox` or `realdebrid` — last provider that served successfully |
+| `consecutive_failures` | Resets to 0 on success; drives degraded detection |
+| `last_fail_reason` | Structured reason code (e.g. `NO_CACHED_RELEASE`, `RD_429`) |
+
+Helpers in db.py: `get_playability_state`, `update_playability_ok`,
+`update_playability_fail`, `reset_playability_state`, `get_degraded_items`.
 
 ---
 
 ## Known remaining issues / next steps
 
-- **Jellyfin duplicates after migration**: user needs to remove + re-add Movies library
-  in Jellyfin to clear stale DB entries from renamed folders.
-- **The Amateur (2025)**: has no imdb_id in virtual_items (`tt14961434` is the correct
-  one). Set manually: `UPDATE virtual_items SET imdb_id='tt14961434' WHERE token='227a6d344f04441c'`
-  Then run Admin → Repair broken strm files.
+- **The Amateur (2025)**: `imdb_id='tt14961434'`, known good `info_hash=
+  'fafbc580d1cb04e00b13b64050375be6021b4536'` (RD-cached 4K). With the known-hash RD fast
+  path it should now resolve. If still failing, hit re-resolve:
+  `curl -X POST http://localhost:8088/ui/api/virtual-items/227a6d344f04441c/re-resolve`
+  and check `playability_state.last_fail_reason` for the structured cause.
+- **Re-resolve UI button**: backend endpoints (`/re-resolve`, `/playability-state`) are
+  live but not yet wired into `Admin.tsx`. Next obvious UI add.
 - **Highlander folder**: has imdb_id `tt1235529` in .nfo but that may be wrong. The 1986
   film is `tt0091203`. Folder is named "Highlander" (no year) as a result.
 - **Series in Mycelium**: Sonarr import added 31 series to `monitored_series` DB. Episodes
@@ -164,7 +249,9 @@ On play (catbox mode):
   Ask user to run `find`/`ls`/`sqlite3` on the NAS when needed.
 - POST endpoints are CSRF-protected by default → trigger via dashboard buttons, not curl.
   CSRF-exempt: `/ui/api/repair-strms`, `/ui/api/migrate-canonical`,
-  `/ui/api/requests/<id>/retry`, `/ui/api/arr-import/*`.
+  `/ui/api/cleanup-duplicate-strms`, `/ui/api/series-backfill`,
+  `/ui/api/virtual-items/<token>/re-resolve`, `/ui/api/requests/<id>/retry`,
+  `/ui/api/arr-import/*`.
 - Single gunicorn worker, 8 threads → in-process state is shared and safe.
 - `settings.get("KEY", default)` reads settings DB first, then falls back to env/config.py.
   Always use `settings.get()` in endpoints — never `config.KEY` directly.
