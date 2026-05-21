@@ -342,6 +342,9 @@ def _materialize_locked(token: str, allow_readd: bool = True) -> str | None:
                 torbox.find_by_id(_tid) if _tid else
                 torbox.find_by_hash(item["info_hash"], force_refresh=True)
             )
+            if not (existing and torbox._is_ready(existing)) and _tid:
+                existing = torbox.wait_until_ready(
+                    item["info_hash"], timeout=ON_PLAY_READY_TIMEOUT_SEC, torrent_id=_tid)
             if existing and torbox._is_ready(existing):
                 torbox_id = existing["id"]
                 db.update_virtual_torbox_id(token, torbox_id)
@@ -456,7 +459,8 @@ def _materialize_locked(token: str, allow_readd: bool = True) -> str | None:
             if not live:
                 live = torbox.find_by_id(_tid) if _tid else None
             if not live or not torbox._is_ready(live):
-                live = torbox.wait_until_ready(new_hash, timeout=ON_PLAY_READY_TIMEOUT_SEC)
+                live = torbox.wait_until_ready(
+                    new_hash, timeout=ON_PLAY_READY_TIMEOUT_SEC, torrent_id=_tid or None)
             if not live:
                 log.error("Catbox: fresh release not ready for %s — keeping .strm, retry soon",
                           item["title"])

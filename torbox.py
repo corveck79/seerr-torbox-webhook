@@ -280,15 +280,18 @@ def _is_ready(item: dict) -> bool:
     return state in ("cached", "completed", "uploading", "metaDL_done")
 
 
-def wait_until_ready(info_hash: str, timeout: int | None = None) -> dict | None:
+def wait_until_ready(info_hash: str, timeout: int | None = None,
+                     torrent_id: int | None = None) -> dict | None:
     """Poll Torbox until the torrent reports completion or the timeout is reached.
     timeout defaults to TORBOX_POLL_TIMEOUT_SEC; pass a smaller value for
-    latency-sensitive paths like on-play re-materialization."""
+    latency-sensitive paths like on-play re-materialization.
+    When torrent_id is given, uses find_by_id (single direct API call) instead
+    of scanning the full mylist — faster and not limited to the top 1000."""
     limit = TORBOX_POLL_TIMEOUT_SEC if timeout is None else timeout
     deadline = time.monotonic() + limit
     last_state: str | None = None
     while time.monotonic() < deadline:
-        item = find_by_hash(info_hash)
+        item = find_by_id(torrent_id) if torrent_id else find_by_hash(info_hash)
         if item is None:
             log.debug("Torrent %s not in mylist yet", info_hash)
         else:
