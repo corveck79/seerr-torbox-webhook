@@ -143,9 +143,25 @@ def find_by_hash(info_hash: str, force_refresh: bool = False) -> dict | None:
     return None
 
 
-def find_by_id(torrent_id: int) -> dict | None:
+def find_by_id(torrent_id: int, timeout: int = 15) -> dict | None:
+    """Fetch a single torrent by ID directly from TorBox — not limited to mylist top-1000."""
+    url = f"{TORBOX_BASE_URL.rstrip('/')}/torrents/mylist"
+    try:
+        resp = requests.get(url, headers=_headers(), timeout=timeout,
+                            params={"id": torrent_id})
+        resp.raise_for_status()
+        data = (resp.json() or {}).get("data")
+        if isinstance(data, dict) and data.get("id") == torrent_id:
+            return data
+        if isinstance(data, list):
+            for item in data:
+                if item.get("id") == torrent_id:
+                    return item
+    except requests.RequestException as exc:
+        log.warning("TorBox find_by_id(%s) failed: %s — falling back to mylist", torrent_id, exc)
+    # Fallback: search cached mylist (covers the case where the API returns unexpected shape)
     for item in list_torrents():
-        if item.get('id') == torrent_id:
+        if item.get("id") == torrent_id:
             return item
     return None
 
