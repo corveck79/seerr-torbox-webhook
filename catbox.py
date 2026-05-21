@@ -136,8 +136,14 @@ def invalidate_url_cache(token: str | None = None) -> None:
             _url_cache.pop(token, None)
 
 
+def catbox_host() -> str:
+    """Externally reachable host for the .strm proxy URL. Settings DB first,
+    env/config fallback. Must be reachable from Jellyfin."""
+    return (_settings.get("CATBOX_HOST", CATBOX_HOST) or "").strip()
+
+
 def proxy_url(token: str) -> str:
-    return f"{CATBOX_HOST.rstrip('/')}/stream/{token}"
+    return f"{catbox_host().rstrip('/')}/stream/{token}"
 
 
 def register(info_hash: str, magnet: str, title: str, media_type: str,

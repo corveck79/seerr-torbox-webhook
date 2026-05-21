@@ -28,10 +28,10 @@ ZILEAN_ENABLED = _env("ZILEAN_ENABLED", "false").lower() in ("1", "true", "yes")
 TORRENTIO_BASE_URL = _env("TORRENTIO_BASE_URL", "https://torrentio.strem.fun")
 TORRENTIO_OPTS = _env("TORRENTIO_OPTS", "")
 
-JELLYFIN_URL = _env("JELLYFIN_URL", "http://10.0.0.10:8096")
+JELLYFIN_URL = _env("JELLYFIN_URL", "")
 JELLYFIN_API_KEY = _env("JELLYFIN_API_KEY", "")
 
-SEERR_URL = _env("SEERR_URL", "http://10.0.0.10:5055")
+SEERR_URL = _env("SEERR_URL", "")
 SEERR_API_KEY = _env("SEERR_API_KEY", "")
 
 TMDB_API_KEY = _env("TMDB_API_KEY", "")
@@ -104,8 +104,9 @@ BLACKLIST_FAIL_THRESHOLD = _env_int("BLACKLIST_FAIL_THRESHOLD", 3)
 # CATBOX_IDLE_MINUTES of inactivity. Stays within TorBox 30-day retention.
 CATBOX_MODE = _env("CATBOX_MODE", "false").lower() in ("1", "true", "yes")
 # Externally reachable host for the proxy URL written into .strm files.
-# Example: http://10.0.0.10:8088 (must be reachable from Jellyfin).
-CATBOX_HOST = _env("CATBOX_HOST", "http://10.0.0.10:8088")
+# Example: http://192.168.1.50:8088 (must be reachable from Jellyfin).
+# No default — set this in the setup wizard or .env, or .strm files will be broken.
+CATBOX_HOST = _env("CATBOX_HOST", "")
 CATBOX_IDLE_MINUTES = _env_int("CATBOX_IDLE_MINUTES", 1440)
 CATBOX_GC_INTERVAL_MINUTES = _env_int("CATBOX_GC_INTERVAL_MINUTES", 10)
 # True lazy materialization: on import, only verify the release is cached and

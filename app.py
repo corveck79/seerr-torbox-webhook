@@ -165,7 +165,8 @@ def _start_scheduler() -> BackgroundScheduler:
         )
         log.info("Scheduled series monitor every %dh", MONITOR_INTERVAL_HOURS)
 
-    if MOVIE_SYNC_INTERVAL_MINUTES > 0 and cfg.SEERR_URL:
+    import seerr as _seerr
+    if MOVIE_SYNC_INTERVAL_MINUTES > 0 and _seerr.is_configured():
         scheduler.add_job(
             monitor.sync_movies,
             trigger="interval", minutes=MOVIE_SYNC_INTERVAL_MINUTES,

@@ -8,7 +8,7 @@ import processor
 import seerr
 import tmdb
 import torbox
-from config import CATCHUP_DELAY_SEC, CATCHUP_TAKE, SEERR_URL
+from config import CATCHUP_DELAY_SEC, CATCHUP_TAKE
 from webhook_parser import MediaRequest
 
 log = logging.getLogger(__name__)
@@ -49,7 +49,7 @@ def _build_request(item: dict) -> MediaRequest | None:
 
 
 def run() -> None:
-    if not SEERR_URL:
+    if not seerr.is_configured():
         log.info("Catch-up: skipped (SEERR_URL not configured — using SPA discovery instead)")
         return
     log.info("Catch-up: fetching up to %d approved requests from Seerr", CATCHUP_TAKE)

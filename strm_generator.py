@@ -797,8 +797,7 @@ def repair_expired_strms(media_type: str = "movie") -> dict:
 def _repair_expired_strms_locked(media_type: str = "movie") -> dict:
     import re as _re
     import catbox as _catbox
-    from config import CATBOX_HOST
-    catbox_base = CATBOX_HOST.rstrip("/") + "/stream/"
+    catbox_base = _catbox.catbox_host().rstrip("/") + "/stream/"
 
     media = Path(MEDIA_PATH)
     sub = "movies" if media_type == "movie" else "series"

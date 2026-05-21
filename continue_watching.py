@@ -5,22 +5,25 @@ import logging
 
 import requests
 
+import config
 import db
 import monitor
-from config import JELLYFIN_API_KEY, JELLYFIN_URL
+import settings as _settings
 
 log = logging.getLogger(__name__)
 
 
 def _jellyfin_resume_items() -> list[dict]:
     """Items currently being watched across all users."""
-    if not (JELLYFIN_URL and JELLYFIN_API_KEY):
+    jellyfin_url = (_settings.get("JELLYFIN_URL", config.JELLYFIN_URL) or "").strip()
+    jellyfin_key = (_settings.get("JELLYFIN_API_KEY", config.JELLYFIN_API_KEY) or "").strip()
+    if not (jellyfin_url and jellyfin_key):
         return []
     try:
         r = requests.get(
-            f"{JELLYFIN_URL.rstrip('/')}/Users/Me/Items/Resume",
+            f"{jellyfin_url.rstrip('/')}/Users/Me/Items/Resume",
             params={"Limit": 50},
-            headers={"X-Emby-Token": JELLYFIN_API_KEY},
+            headers={"X-Emby-Token": jellyfin_key},
             timeout=8,
         )
         r.raise_for_status()
