@@ -93,22 +93,35 @@ _mylist_lock = __import__("threading").Lock()
 
 
 def list_torrents(timeout: int = 30, force_refresh: bool = False) -> list[dict]:
-    """Return TorBox mylist, cached for ~45s. Use force_refresh=True after a
-    successful add or delete to avoid serving a stale view."""
+    """Return TorBox mylist (all pages), cached for ~45s."""
     import time as _t
     if not force_refresh:
         cached = _mylist_cache["items"]
         if cached is not None and (_t.monotonic() - _mylist_cache["ts"]) < _MYLIST_TTL_SECONDS:
             return cached
     url = f"{TORBOX_BASE_URL.rstrip('/')}/torrents/mylist"
-    resp = requests.get(url, headers=_headers(), timeout=timeout)
-    resp.raise_for_status()
-    payload = resp.json() or {}
-    items = payload.get("data", []) or []
+    all_items: list[dict] = []
+    seen_ids: set[int] = set()
+    offset = 0
+    limit = 1000
+    for _ in range(20):  # max 20 pages = 20 000 items; guards against infinite loop
+        resp = requests.get(url, headers=_headers(), timeout=timeout,
+                            params={"limit": limit, "offset": offset})
+        resp.raise_for_status()
+        payload = resp.json() or {}
+        page = payload.get("data", []) or []
+        new = [t for t in page if t.get("id") not in seen_ids]
+        if not new:
+            break
+        all_items.extend(new)
+        seen_ids.update(t["id"] for t in new)
+        if len(page) < limit:
+            break
+        offset += limit
     with _mylist_lock:
-        _mylist_cache["items"] = items
+        _mylist_cache["items"] = all_items
         _mylist_cache["ts"] = _t.monotonic()
-    return items
+    return all_items
 
 
 def invalidate_mylist_cache() -> None:

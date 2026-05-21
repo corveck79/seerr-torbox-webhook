@@ -591,10 +591,16 @@ def release_idle() -> int:
     items = db.get_idle_virtual_items(cutoff_iso)
     released = 0
     for item in items:
-        if torbox.delete_torrent(item["torbox_id"]):
-            db.update_virtual_torbox_id(item["token"], None)
-            log.info("Catbox: released idle torrent %s (%s)", item["torbox_id"], item["title"])
-            released += 1
+        deleted = torbox.delete_torrent(item["torbox_id"])
+        if not deleted:
+            # Torrent may already be gone from TorBox (evicted or manually removed).
+            # Still clear the local reference so catbox can re-add it on next play.
+            still_there = torbox.find_by_id(item["torbox_id"])
+            if still_there:
+                continue
+        db.update_virtual_torbox_id(item["token"], None)
+        log.info("Catbox: released idle torrent %s (%s)", item["torbox_id"], item["title"])
+        released += 1
     if released:
         log.info("Catbox: released %d idle torrent(s)", released)
     return released
