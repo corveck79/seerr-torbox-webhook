@@ -72,7 +72,14 @@ def add_magnet(magnet: str, timeout: int = 30, reason: str = "unknown") -> dict:
         raise RateLimited()
     _record_createtorrent(reason)
     log.info("createtorrent [%s] (%d/60 this hour): %s", reason, usage["count"] + 1, magnet[:80])
-    resp = requests.post(url, headers=_headers(), data={"magnet": magnet}, timeout=timeout)
+    for _attempt in range(3):
+        resp = requests.post(url, headers=_headers(), data={"magnet": magnet}, timeout=timeout)
+        if resp.status_code != 429:
+            break
+        retry_after = int(resp.headers.get("Retry-After", 5))
+        log.warning("createtorrent [%s] got 429 — retrying in %ds (attempt %d/3)",
+                    reason, retry_after, _attempt + 1)
+        time.sleep(retry_after)
     resp.raise_for_status()
     payload = resp.json() or {}
     if not payload.get("success", False):

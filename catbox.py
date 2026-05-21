@@ -472,6 +472,15 @@ def _materialize_locked(token: str, allow_readd: bool = True) -> str | None:
             import strm_generator
             if item["media_type"] == "movie":
                 main = strm_generator._pick_main_movie_file(live.get("files") or [])
+                if main:
+                    file_id = main["id"]
+                    db.update_virtual_file_id(token, file_id)
+                elif not (live.get("files")):
+                    # TorBox returned the torrent without a files list (common for the
+                    # ?id= single-item endpoint).  Use file_id=0 which tells TorBox to
+                    # serve the largest file automatically — works for single-file movies.
+                    log.info("Catbox: no files list for %s — using file_id=0 (auto)", item["title"])
+                    file_id = 0
             else:
                 videos = [f for f in (live.get("files") or [])
                           if strm_generator._is_video(f.get("name") or "")
@@ -486,13 +495,13 @@ def _materialize_locked(token: str, allow_readd: bool = True) -> str | None:
                     )
                 else:
                     main = max(videos, key=lambda f: f.get("size") or 0) if videos else None
-            if main:
-                file_id = main["id"]
-                db.update_virtual_file_id(token, file_id)
+                if main:
+                    file_id = main["id"]
+                    db.update_virtual_file_id(token, file_id)
 
-    if not file_id:
-        log.error("Catbox: no playable file found for %s — removing from library", token)
-        _remove_strm(item)
+    if file_id is None or (not file_id and file_id != 0):
+        log.error("Catbox: no playable file found for %s — keeping .strm, retry later", token)
+        _fail_put(token, _FAIL_COOLDOWN_SEC)
         if ckey:
             db.update_playability_fail(ckey, REASON_NO_FILE)
         return None
