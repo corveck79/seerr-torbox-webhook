@@ -337,8 +337,9 @@ def _materialize_locked(token: str, allow_readd: bool = True) -> str | None:
         try:
             log.info("Catbox: %s adding stored magnet", item["title"])
             added = torbox.add_magnet(item["magnet"], reason="catbox-readd")
-            existing = added if added.get("id") and torbox._is_ready(added) else (
-                torbox.find_by_id(added["id"]) if added.get("id") else
+            _tid = added.get("id") or added.get("torrent_id")
+            existing = added if _tid and torbox._is_ready(added) else (
+                torbox.find_by_id(_tid) if _tid else
                 torbox.find_by_hash(item["info_hash"], force_refresh=True)
             )
             if existing and torbox._is_ready(existing):
@@ -449,9 +450,11 @@ def _materialize_locked(token: str, allow_readd: bool = True) -> str | None:
         try:
             added = torbox.add_magnet(new_magnet, reason="catbox-search")
             # Use the ID from the add response to avoid a full mylist refresh.
-            live = added if added.get("id") and torbox._is_ready(added) else None
+            # TorBox returns "torrent_id" for cached adds, "id" for others.
+            _tid = added.get("id") or added.get("torrent_id")
+            live = added if _tid and torbox._is_ready(added) else None
             if not live:
-                live = torbox.find_by_id(added["id"]) if added.get("id") else None
+                live = torbox.find_by_id(_tid) if _tid else None
             if not live or not torbox._is_ready(live):
                 live = torbox.wait_until_ready(new_hash, timeout=ON_PLAY_READY_TIMEOUT_SEC)
             if not live:

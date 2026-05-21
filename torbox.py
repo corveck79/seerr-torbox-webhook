@@ -89,9 +89,13 @@ def add_magnet(magnet: str, timeout: int = 30, reason: str = "unknown") -> dict:
             invalidate_mylist_cache()
             return payload.get("data", {}) or {}
         raise RuntimeError(f"Torbox add failed: {payload}")
-    log.info("Torbox createtorrent response: %s", payload.get("detail") or payload.get("data"))
+    data = payload.get("data", {}) or {}
+    # Normalize: TorBox returns "torrent_id" for cached adds, "id" for others.
+    if data.get("torrent_id") and not data.get("id"):
+        data["id"] = data["torrent_id"]
+    log.info("Torbox createtorrent response: %s (id=%s)", payload.get("detail") or data, data.get("id"))
     invalidate_mylist_cache()
-    return payload.get("data", {}) or {}
+    return data
 
 
 _MYLIST_TTL_SECONDS = 45
