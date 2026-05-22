@@ -202,10 +202,16 @@ def _retry_episode(ep: dict) -> bool:
     db.increment_episode_attempt(ep["id"])
 
     streams: list = []
+    seen_hashes: set = set()
     if _settings.get("ZILEAN_ENABLED", False):
-        streams = zilean.fetch_streams(imdb_id, season=season, episode=episode)
-    if not streams:
-        streams = torrentio.fetch_streams("series", imdb_id, season=season, episode=episode)
+        for s in zilean.fetch_streams(imdb_id, season=season, episode=episode):
+            if s.info_hash not in seen_hashes:
+                seen_hashes.add(s.info_hash)
+                streams.append(s)
+    for s in torrentio.fetch_streams("series", imdb_id, season=season, episode=episode):
+        if s.info_hash not in seen_hashes:
+            seen_hashes.add(s.info_hash)
+            streams.append(s)
 
     candidates = torrentio.rank_streams(streams)
     if not candidates:

@@ -41,33 +41,39 @@ def _rank(streams, prefer_season_pack: bool = False, override: dict | None = Non
 
 def _fetch_movie_candidates(req: MediaRequest) -> list:
     override = db.get_show_override(req.imdb_id)
+    streams: list[TorrentioStream] = []
+    seen_hashes: set[str] = set()
     if _settings.get("ZILEAN_ENABLED", False) and health_cache.is_up("zilean"):
-        streams = zilean.fetch_streams(req.imdb_id)
-        candidates = _rank(streams, override=override)
-        if candidates:
-            log.info("Zilean found %d candidate(s) for movie %s", len(candidates), req.title)
-            return candidates
-        log.info("Zilean: no candidates for %s; falling back to Torrentio", req.title)
-    if not health_cache.is_up("torrentio"):
-        log.warning("Torrentio appears down; no candidates")
-        return []
-    streams = torrentio.fetch_streams("movie", req.imdb_id)
+        for s in zilean.fetch_streams(req.imdb_id):
+            if s.info_hash not in seen_hashes:
+                seen_hashes.add(s.info_hash)
+                streams.append(s)
+    if health_cache.is_up("torrentio"):
+        for s in torrentio.fetch_streams("movie", req.imdb_id):
+            if s.info_hash not in seen_hashes:
+                seen_hashes.add(s.info_hash)
+                streams.append(s)
+    if streams:
+        log.info("Combined %d unique streams for movie %s (zilean+torrentio)", len(streams), req.title)
     return _rank(streams, override=override)
 
 
 def _fetch_season_candidates(req: MediaRequest, season: int, episode: int, prefer_season_pack: bool = False) -> list:
     override = db.get_show_override(req.imdb_id)
+    streams: list[TorrentioStream] = []
+    seen_hashes: set[str] = set()
     if _settings.get("ZILEAN_ENABLED", False) and health_cache.is_up("zilean"):
-        streams = zilean.fetch_streams(req.imdb_id, season=season, episode=episode)
-        candidates = _rank(streams, prefer_season_pack=prefer_season_pack, override=override)
-        if candidates:
-            log.info("Zilean found %d candidate(s) for %s S%02dE%02d", len(candidates), req.title, season, episode)
-            return candidates
-        log.info("Zilean: no candidates for %s S%02dE%02d; falling back to Torrentio", req.title, season, episode)
-    if not health_cache.is_up("torrentio"):
-        log.warning("Torrentio appears down; no candidates")
-        return []
-    streams = torrentio.fetch_streams("series", req.imdb_id, season=season, episode=episode)
+        for s in zilean.fetch_streams(req.imdb_id, season=season, episode=episode):
+            if s.info_hash not in seen_hashes:
+                seen_hashes.add(s.info_hash)
+                streams.append(s)
+    if health_cache.is_up("torrentio"):
+        for s in torrentio.fetch_streams("series", req.imdb_id, season=season, episode=episode):
+            if s.info_hash not in seen_hashes:
+                seen_hashes.add(s.info_hash)
+                streams.append(s)
+    if streams:
+        log.info("Combined %d unique streams for %s S%02dE%02d (zilean+torrentio)", len(streams), req.title, season, episode)
     return _rank(streams, prefer_season_pack=prefer_season_pack, override=override)
 
 
