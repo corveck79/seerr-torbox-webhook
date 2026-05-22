@@ -35,15 +35,13 @@
 
 ---
 
-> [!WARNING]
-> **🚧 Work in progress (early days).** Mycelium is actively developed and not yet
-> battle-tested. Expect rough edges, breaking changes, and bugs. It's built and
-> primarily tested against one specific home setup (Synology NAS + Jellyfin + TorBox),
-> so things may not work out of the box in your environment yet. Defaults like server
-> IPs **must** be set via the setup wizard or `.env`. Don't assume any value is
-> production-safe. Try it, kick the tires, and please
-> [open an issue](https://github.com/corveck79/mycelium/issues) if something breaks.
-> Feedback at this stage is hugely helpful. Not recommended for unattended/critical use.
+> [!NOTE]
+> **Beta.** Mycelium is in active use by a small group of users and works reliably,
+> but it's still evolving. Expect occasional breaking changes between releases.
+> Primarily tested on Synology NAS + Jellyfin + TorBox. The setup wizard handles
+> initial configuration; no `.env` editing required.
+> [Open an issue](https://github.com/corveck79/mycelium/issues) if something breaks
+> or start a [discussion](https://github.com/corveck79/mycelium/discussions) for questions.
 
 ---
 
@@ -63,14 +61,14 @@ from **TorBox**. No FUSE, no rclone, no local downloads.
                   Jellyfin plays  →  /stream/<token>  →  TorBox CDN (on-demand)
 ```
 
-Built for the **Jellyfin + TorBox** stack. No FUSE, no rclone, no local downloads, no Plex required (but supported via WebDAV).
+Built for the **Jellyfin + TorBox** stack. Plex supported via optional WebDAV.
 
 ### Two UIs, one container
 
 | | Path | Purpose |
 |--|--|--|
 | **SPA** | `/` | Netflix-style poster grids, per-service browsing, library overview, multi-user, watchlist, request management |
-| **Admin dashboard** | `/admin` | Operations console: overview, requests, blacklist, repair, settings, logs. Embedded as iframe within the SPA |
+| **Admin dashboard** | `/admin` | Operations console: overview, requests, blacklist, maintenance, settings, logs. Embedded within the SPA |
 
 ---
 
@@ -100,7 +98,7 @@ The name felt right. Mycelium.
 <summary><b>Core pipeline</b></summary>
 
 - 🪝 **Two request paths**: built-in TMDB browser (default) OR Seerr/Jellyseerr webhook.
-- 🔎 **Zilean (local) + Torrentio (fallback)** with health-aware skipping.
+- 🔎 **Zilean + Torrentio combined search** with deduplication and health-aware skipping.
 - ⚡ **TorBox cache-first** strategy with 429 retry and per-hash blacklist.
 - 📝 **Jellyfin-friendly naming**: `Movie (Year)/Movie (Year).strm`, `Series/Season XX/Series S01E01.strm`.
 - 🎬 **Automatic library refresh**.
@@ -183,7 +181,7 @@ sequenceDiagram
 <summary><b>🖥 UX</b></summary>
 
 - **Web-based setup wizard** on first launch (no `.env` editing required).
-- Admin dashboard at `/admin`: overview, requests, blacklist, repair, settings, logs. Dark/light theme.
+- Admin dashboard at `/admin`: overview, requests, blacklist, maintenance, settings, logs. Dark/light theme.
 - **Manual search & pick**: see every Zilean/Torrentio candidate, pick exactly which to add.
 - **Runtime settings**: toggle Catbox mode, quality filters, etc. without restart.
 - **Live stats**: quality distribution, source win-rate, latency, retry queue, library orphans.
@@ -309,7 +307,8 @@ The full reference lives in [`.env.example`](.env.example). Key knobs:
 | `CATBOX_IDLE_MINUTES` | `60` | Idle time before a torrent is released from TorBox |
 | `QUALITY_PREFERENCE` | `1080p,2160p,720p` | Comma-separated preference order |
 | `ALLOW_4K` | `true` | Allow 2160p releases |
-| `EXCLUDE_REMUX` | `true` | Skip BluRay remux unless no alternatives |
+| `EXCLUDE_REMUX` | `true` | Skip remux releases unless no alternatives |
+| `EXCLUDE_BLURAY` | `false` | Skip all BluRay encodes (BDRip, BRRip) |
 | `EXCLUDE_CAM` | `true` | Skip CAM/TS/screener |
 | `PREFER_WEBDL` | `true` | Prefer WEB-DL sources |
 | `PREFER_HEVC` | `true` | Prefer HEVC encodes |
@@ -488,12 +487,7 @@ If the DB itself is corrupted: Admin → Overview → **Recovery wizard** rebuil
 
 ## 🗺 Roadmap
 
-See [open issues](https://github.com/corveck79/mycelium/issues) for current work.
-
-**Completed:**
-multi-debrid fallback (RealDebrid), Plex via WebDAV, Prometheus metrics, setup wizard,
-dark/light theme, OIDC/SSO, Radarr/Sonarr bulk import, strm repair, failed request retry,
-library status in Discover, request management with delete, episode reconciliation.
+See [open issues](https://github.com/corveck79/mycelium/issues) and [discussions](https://github.com/corveck79/mycelium/discussions) for current work and feature requests.
 
 ## 🤝 Contributing
 
