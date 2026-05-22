@@ -114,6 +114,8 @@ def login_submit():
     username = (request.form.get("username") or "").strip()
     password = request.form.get("password") or ""
     nxt = request.form.get("next") or "/"
+    if not nxt.startswith("/") or nxt.startswith("//"):
+        nxt = "/"
     if auth.attempt_login(username, password):
         _session["user"] = username
         return redirect(nxt)
@@ -128,10 +130,10 @@ def logout_view():
 
 
 @app.post("/ui/set-password")
+@auth.require_auth
 def ui_set_password():
-    if not auth.is_enabled() and not auth.current_user() and not request.form.get("force_first"):
-        # Don't expose this when auth is off — the user wouldn't get gated anyway
-        return jsonify(error="auth disabled"), 400
+    if not auth.is_admin():
+        return jsonify(error="admin required"), 403
     new_pw = request.form.get("password") or ""
     if len(new_pw) < 6:
         flash("Password must be at least 6 characters", "err")
