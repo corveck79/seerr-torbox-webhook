@@ -489,6 +489,11 @@ library status in Discover, request management with delete, episode reconciliati
 
 ---
 
+## 📖 Community guides
+
+- **[Proxmox / NAS install guide](docs/install-guide.html)** -- step-by-step walkthrough for both Proxmox LXC and Synology NAS setups, available in English and Dutch. Also available as a [zip bundle](docs/mycelium-install-guide.zip) with `docker-compose.yml` and `.env`.
+  Written by [Ventrex](https://github.com/Ventrex07).
+
 ## 🤝 Contributing
 
 PRs and issues welcome. There's no formal style guide. Keep changes focused, run the (sparse) tests in `tests/`, and don't break the dashboard.
