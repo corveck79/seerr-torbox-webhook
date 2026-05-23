@@ -1,39 +1,53 @@
-# Parked — no migrations needed for the web player.
+# Parked — exact snippets to add to db.py when activating the web player.
 #
-# The existing virtual_items table has everything required:
-#   source    = 'web_player'  →  distinguishes browser tokens
-#   strm_path = NULL          →  browser tokens don't write .strm files
-#   imdb_id / season / episode / quality  →  already present
+# 1. Add both migrations to _run_migrations() (inside the `with _connect() as conn:` block,
+#    alongside the existing region migration at line ~376)
 #
-# Optional later addition (resume position):
+# 2. Update list_users(), update_user() and create_user() as shown below.
+
+# ── Migrations ────────────────────────────────────────────────────────────────
 #
-# MIGRATION_PLAYBACK_SESSIONS = """
-# CREATE TABLE IF NOT EXISTS playback_sessions (
-#     id         INTEGER PRIMARY KEY AUTOINCREMENT,
-#     user_id    INTEGER NOT NULL,
-#     token      TEXT    NOT NULL,
-#     position_s REAL    NOT NULL DEFAULT 0,
-#     duration_s REAL,
-#     updated_at TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%S','now')),
-#     UNIQUE(user_id, token)
-# )
-# """
+# Paste into _run_migrations(), after the existing region migration block:
 #
-# def save_playback_position(user_id, token, position_s, duration_s=None):
-#     with _conn() as c:
-#         c.execute("""
-#             INSERT INTO playback_sessions (user_id, token, position_s, duration_s)
-#             VALUES (?, ?, ?, ?)
-#             ON CONFLICT(user_id, token) DO UPDATE
-#               SET position_s=excluded.position_s,
-#                   duration_s=COALESCE(excluded.duration_s, duration_s),
-#                   updated_at=strftime('%Y-%m-%d %H:%M:%S','now')
-#         """, (user_id, token, position_s, duration_s))
+#   user_cols = {r["name"] for r in conn.execute("PRAGMA table_info(users)")}
+#   if "webplayer_enabled" not in user_cols:
+#       conn.execute("ALTER TABLE users ADD COLUMN webplayer_enabled INTEGER NOT NULL DEFAULT 0")
+#       conn.execute("UPDATE users SET webplayer_enabled = 1 WHERE role = 'admin'")
+#       log.info("Migration: added users.webplayer_enabled (admin=1, users=0)")
+
+
+# ── list_users() ──────────────────────────────────────────────────────────────
+# Add webplayer_enabled to the SELECT (line ~1243):
 #
-# def get_playback_position(user_id, token):
-#     with _conn() as c:
-#         row = c.execute(
-#             "SELECT position_s FROM playback_sessions WHERE user_id=? AND token=?",
-#             (user_id, token),
-#         ).fetchone()
-#     return row["position_s"] if row else 0.0
+# Old:
+#   rows = conn.execute("SELECT id, username, role, quota_monthly, auto_approve, enabled, region, created_at, last_login FROM users ORDER BY id").fetchall()
+#
+# New:
+#   rows = conn.execute("SELECT id, username, role, quota_monthly, auto_approve, enabled, region, webplayer_enabled, created_at, last_login FROM users ORDER BY id").fetchall()
+
+
+# ── update_user() ─────────────────────────────────────────────────────────────
+# Add webplayer_enabled to the allowed set (line ~1250):
+#
+# Old:
+#   allowed = {"password_hash", "role", "quota_monthly", "auto_approve", "enabled", "region"}
+#
+# New:
+#   allowed = {"password_hash", "role", "quota_monthly", "auto_approve", "enabled", "region", "webplayer_enabled"}
+
+
+# ── create_user() ─────────────────────────────────────────────────────────────
+# Admins get webplayer_enabled=1 by default.
+# Change the INSERT at line ~1222:
+#
+# Old:
+#   """INSERT INTO users (username, password_hash, role, quota_monthly, auto_approve)
+#      VALUES (?, ?, ?, ?, ?)"""
+#   (username, password_hash, role, quota_monthly, 1 if auto_approve else 0)
+#
+# New:
+#   """INSERT INTO users (username, password_hash, role, quota_monthly, auto_approve, webplayer_enabled)
+#      VALUES (?, ?, ?, ?, ?, ?)"""
+#   (username, password_hash, role, quota_monthly,
+#    1 if auto_approve else 0,
+#    1 if role == "admin" else 0)
