@@ -37,16 +37,22 @@ export default function DetailModal({
 
   const libStatus = detail?.library_status as string | undefined;
 
-  const [addStatus, setAddStatus] = useState<'idle' | 'adding' | 'added' | 'pending' | 'error'>(
+  const [addStatus, setAddStatus] = useState<'idle' | 'adding' | 'added' | 'pending' | 'error' | 'wanted' | 'upcoming'>(
     'idle',
   );
   const [pollingImdbId, setPollingImdbId] = useState<string | null>(null);
 
-  // Poll request status until success/failed
+  // Poll request status until a terminal state is reached or 3 min timeout
   useEffect(() => {
     if (!pollingImdbId) return;
+    const deadline = Date.now() + 3 * 60 * 1000;
     const interval = setInterval(async () => {
       try {
+        if (Date.now() > deadline) {
+          setAddStatus('error');
+          setPollingImdbId(null);
+          return;
+        }
         const res = await fetch(`/ui/api/requests/status?imdb_id=${pollingImdbId}`);
         if (!res.ok) return;
         const data = await res.json();
@@ -54,7 +60,13 @@ export default function DetailModal({
           setAddStatus('added');
           setPollingImdbId(null);
           queryClient.invalidateQueries({ queryKey: ['detail', mediaType, tmdbId] });
-        } else if (data.status === 'failed') {
+        } else if (data.status === 'wanted') {
+          setAddStatus('wanted');
+          setPollingImdbId(null);
+        } else if (data.status === 'upcoming') {
+          setAddStatus('upcoming');
+          setPollingImdbId(null);
+        } else if (data.status === 'failed' || data.status === 'rate_limited') {
           setAddStatus('error');
           setPollingImdbId(null);
         }
@@ -430,6 +442,13 @@ function LibraryButton({
     return (
       <button type="button" disabled className="px-4 py-2 rounded-lg bg-yellow-600 text-white font-semibold text-sm cursor-default">
         Wanted
+      </button>
+    );
+  }
+  if (addStatus === 'wanted' || addStatus === 'upcoming') {
+    return (
+      <button type="button" disabled className="px-4 py-2 rounded-lg bg-yellow-600 text-white font-semibold text-sm cursor-default">
+        {addStatus === 'upcoming' ? 'Upcoming' : 'Wanted'}
       </button>
     );
   }
