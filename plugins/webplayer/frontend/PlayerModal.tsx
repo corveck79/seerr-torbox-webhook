@@ -174,42 +174,32 @@ export default function PlayerModal({ imdb_id, media_type, title, season, episod
     if (!videoRef.current || !subtitleUrl) return
     const video = videoRef.current
 
-    // Remove any TextTracks we added previously
-    const existing = Array.from(video.textTracks).find(t => t.label === 'external')
-    if (existing) existing.mode = 'disabled'
+    // Disable any previously injected tracks
+    Array.from(video.textTracks).forEach(t => {
+      if (t.label === 'external') t.mode = 'disabled'
+    })
+    Array.from(video.querySelectorAll('track[label="external"]')).forEach(t => t.remove())
 
-    // Fetch the VTT and inject cues directly into a TextTrack.
-    // This approach works with HLS.js (which uses a blob src) and avoids
-    // the unreliable <track> load event across browsers.
     fetch(subtitleUrl)
       .then(r => r.text())
       .then(vtt => {
-        // Remove old <track> elements
-        Array.from(video.querySelectorAll('track[label="external"]')).forEach(t => t.remove())
-
-        const el = document.createElement('track')
-        el.kind    = 'subtitles'
-        el.label   = 'external'
-        el.default = true
-        video.appendChild(el)
-
-        const tt = el.track
+        // addTextTrack creates a live, writable TextTrack — works with HLS.js
+        const tt = video.addTextTrack('subtitles', 'external', 'und')
         tt.mode = 'showing'
 
-        // Parse VTT cues and add them to the track
+        const toSec = (t: string) => {
+          const parts = t.replace(',', '.').split(':').map(Number)
+          return parts.length === 3
+            ? parts[0] * 3600 + parts[1] * 60 + parts[2]
+            : parts[0] * 60 + parts[1]
+        }
+
         const lines = vtt.split('\n')
         let i = 0
         while (i < lines.length) {
           const line = lines[i].trim()
-          // Cue timing line: 00:00:01.000 --> 00:00:04.000
           if (line.includes('-->')) {
             const [startStr, endStr] = line.split('-->').map(s => s.trim())
-            const toSec = (t: string) => {
-              const parts = t.replace(',', '.').split(':').map(Number)
-              return parts.length === 3
-                ? parts[0] * 3600 + parts[1] * 60 + parts[2]
-                : parts[0] * 60 + parts[1]
-            }
             const start = toSec(startStr)
             const end   = toSec(endStr)
             i++
