@@ -219,6 +219,8 @@ export const api = {
     http<{ ok: boolean; watched: number }>('/ui/api/trakt/sync-watched', { method: 'POST' }),
   traktWatched: () =>
     http<{ imdb_ids: string[] }>('/ui/api/trakt/watched'),
+  traktWatchedEpisodes: () =>
+    http<{ shows: Record<string, Record<string, number[]>> }>('/ui/api/trakt/watched-episodes'),
   traktScrobble: (params: {
     action: 'start' | 'pause' | 'stop';
     media_type: string;

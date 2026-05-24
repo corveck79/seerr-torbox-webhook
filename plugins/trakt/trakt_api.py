@@ -244,6 +244,29 @@ def get_watched_imdb_ids(user_id: int) -> list[str]:
         return [r["imdb_id"] for r in rows]
 
 
+def upsert_watched_episode(user_id: int, imdb_id: str, season: int, episode: int) -> None:
+    with db._connect() as c:
+        c.execute(
+            """INSERT OR IGNORE INTO trakt_watched_episodes (user_id, imdb_id, season, episode)
+               VALUES (?, ?, ?, ?)""",
+            (user_id, imdb_id, season, episode),
+        )
+
+
+def get_watched_episodes(user_id: int) -> dict[str, dict[str, list[int]]]:
+    """Returns {imdb_id: {season_str: [ep, ...]}} for all watched episodes."""
+    with db._connect() as c:
+        rows = c.execute(
+            "SELECT imdb_id, season, episode FROM trakt_watched_episodes WHERE user_id = ?",
+            (user_id,),
+        ).fetchall()
+    result: dict[str, dict[str, list[int]]] = {}
+    for r in rows:
+        show = result.setdefault(r["imdb_id"], {})
+        show.setdefault(str(r["season"]), []).append(r["episode"])
+    return result
+
+
 def sync_user_watched(user_id: int, access_token: str) -> int:
     """Pulls Trakt watch history into trakt_watched. Returns count synced."""
     synced = 0
@@ -264,6 +287,15 @@ def sync_user_watched(user_id: int, access_token: str) -> int:
             continue
         upsert_watched(user_id, imdb_id, "tv", item.get("last_watched_at"),
                        tmdb_id=ids.get("tmdb"))
+        # Also store per-episode data from Trakt's seasons array
+        for season_data in item.get("seasons", []):
+            snum = season_data.get("number")
+            if snum is None:
+                continue
+            for ep_data in season_data.get("episodes", []):
+                enum = ep_data.get("number")
+                if enum is not None and ep_data.get("plays", 0) > 0:
+                    upsert_watched_episode(user_id, imdb_id, snum, enum)
         synced += 1
     return synced
 

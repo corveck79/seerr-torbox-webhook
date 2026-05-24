@@ -1,7 +1,8 @@
-import { useState, Suspense } from 'react';
+import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../api';
 import { usePluginSlot } from '../hooks/usePluginSlots';
+import { useWatched } from '../hooks/useWatched';
 
 type Tab = 'movies' | 'series';
 
@@ -33,21 +34,57 @@ function MoviesPanel() {
     queryKey: ['library-movies'],
     queryFn: api.libraryMovies,
   });
+  const { data: session } = useQuery({ queryKey: ['session'], queryFn: api.session });
+  const canPlay = !!(session?.user as any)?.webplayer_enabled;
+  const watched  = useWatched();
+  const MoviePlayer = usePluginSlot('movie-player');
+
+  const [playMovie, setPlayMovie] = useState<{ imdb_id: string; title: string } | null>(null);
+
   if (isLoading) return <div className="text-muted">Loading...</div>;
   const items = data?.items || [];
   const available = items.filter((m: any) => m.status === 'success');
-  const wanted = items.filter((m: any) => m.status === 'wanted');
-  const upcoming = items.filter((m: any) => m.status === 'upcoming' || m.status === 'failed');
+  const wanted    = items.filter((m: any) => m.status === 'wanted');
+  const upcoming  = items.filter((m: any) => m.status === 'upcoming' || m.status === 'failed');
+
   return (
-    <div className="space-y-6">
-      <MovieTable title="Available" items={available} />
-      {wanted.length > 0 && <MovieTable title="Wanted" items={wanted} dimmed />}
-      {upcoming.length > 0 && <MovieTable title="Upcoming" items={upcoming} dimmed />}
-    </div>
+    <>
+      <div className="space-y-6">
+        <MovieTable
+          title="Available" items={available}
+          canPlay={canPlay} watched={watched}
+          onPlay={m => setPlayMovie(m)}
+        />
+        {wanted.length > 0 && (
+          <MovieTable title="Wanted" items={wanted} dimmed canPlay={false} watched={watched} onPlay={() => {}} />
+        )}
+        {upcoming.length > 0 && (
+          <MovieTable title="Upcoming" items={upcoming} dimmed canPlay={false} watched={watched} onPlay={() => {}} />
+        )}
+      </div>
+
+      {playMovie && MoviePlayer && (
+        <MoviePlayer
+          imdb_id={playMovie.imdb_id}
+          media_type="movie"
+          title={playMovie.title}
+          onClose={() => setPlayMovie(null)}
+        />
+      )}
+    </>
   );
 }
 
-function MovieTable({ title, items, dimmed }: { title: string; items: any[]; dimmed?: boolean }) {
+function MovieTable({
+  title, items, dimmed, canPlay, watched, onPlay,
+}: {
+  title: string;
+  items: any[];
+  dimmed?: boolean;
+  canPlay: boolean;
+  watched: Set<string>;
+  onPlay: (m: { imdb_id: string; title: string }) => void;
+}) {
   if (items.length === 0) return null;
   return (
     <div className={dimmed ? 'opacity-60' : ''}>
@@ -62,40 +99,48 @@ function MovieTable({ title, items, dimmed }: { title: string; items: any[]; dim
               <th className="text-left py-2 px-3">Quality</th>
               <th className="text-left py-2 px-3">Source</th>
               <th className="text-left py-2 px-3">Added</th>
+              {canPlay && <th className="py-2 px-3" />}
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
-            {items.map((m: any) => (
-              <tr key={m.imdb_id} className="hover:bg-card/50 transition">
-                <td className="py-2 px-3 font-medium">
-                  <div>{m.title}</div>
-                  <div className="text-[10px] text-muted font-mono">{m.imdb_id}</div>
-                </td>
-                <td className="py-2 px-3 text-muted">{m.quality || '-'}</td>
-                <td className="py-2 px-3 text-muted text-xs">{m.source || '-'}</td>
-                <td className="py-2 px-3 text-muted text-xs">{fmtDate(m.created_at)}</td>
-              </tr>
-            ))}
+            {items.map((m: any) => {
+              const isWatched = watched.has(m.imdb_id);
+              return (
+                <tr key={m.imdb_id} className="hover:bg-card/50 transition">
+                  <td className="py-2 px-3 font-medium">
+                    <div className="flex items-center gap-2">
+                      <span>{m.title}</span>
+                      {isWatched && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-500/20 text-green-400 font-medium">
+                          gezien
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-[10px] text-muted font-mono">{m.imdb_id}</div>
+                  </td>
+                  <td className="py-2 px-3 text-muted">{m.quality || '-'}</td>
+                  <td className="py-2 px-3 text-muted text-xs">{m.source || '-'}</td>
+                  <td className="py-2 px-3 text-muted text-xs">{fmtDate(m.created_at)}</td>
+                  {canPlay && (
+                    <td className="py-2 px-3 text-right">
+                      <button
+                        type="button"
+                        onClick={() => onPlay({ imdb_id: m.imdb_id, title: m.title })}
+                        className="text-xs px-2 py-0.5 rounded bg-accent/20 text-accent
+                                   hover:bg-indigo-600 hover:text-white transition-colors"
+                        title="Speel af in browser"
+                      >
+                        ▶ Play
+                      </button>
+                    </td>
+                  )}
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
     </div>
-  );
-}
-
-function StatusBadge({ status }: { status: string }) {
-  const colors: Record<string, string> = {
-    success: 'bg-green-500/20 text-green-400',
-    processing: 'bg-yellow-500/20 text-yellow-400',
-    failed: 'bg-red-500/20 text-red-400',
-    wanted: 'bg-orange-500/20 text-orange-400',
-    upcoming: 'bg-blue-500/20 text-blue-400',
-    rate_limited: 'bg-red-500/20 text-red-400',
-  };
-  return (
-    <span className={`text-xs px-2 py-0.5 rounded ${colors[status] || 'bg-card text-muted'}`}>
-      {(status || 'pending').replace('_', ' ')}
-    </span>
   );
 }
 
@@ -106,12 +151,25 @@ function SeriesPanel() {
     queryFn: () => fetch('/ui/api/library/series-episodes').then(r => r.json()),
   });
   const { data: session } = useQuery({ queryKey: ['session'], queryFn: api.session });
-  // webplayer_enabled is injected by the webplayer plugin; absent when plugin not loaded
   const canPlay = !!(session?.user as any)?.webplayer_enabled;
+  const traktConnected = !!(session?.user as any)?.trakt_connected;
   const PlayerModal = usePluginSlot('episode-player');
   const [playEp, setPlayEp] = useState<{
     imdb_id: string; season: number; episode: number; title: string
   } | null>(null);
+
+  // Per-episode watched data: only fetch when trakt is connected
+  const { data: watchedEpsData } = useQuery({
+    queryKey: ['trakt-watched-episodes'],
+    queryFn: api.traktWatchedEpisodes,
+    enabled: traktConnected,
+    staleTime: 5 * 60 * 1000,
+  });
+  // watchedEps: { imdb_id: { "1": [1,2,3], "2": [1] } }
+  const watchedEps = useMemo(
+    () => watchedEpsData?.shows ?? {},
+    [watchedEpsData],
+  );
 
   if (isLoading) return <div className="text-muted">Loading...</div>;
   const series: any[] = data?.series || [];
@@ -135,6 +193,7 @@ function SeriesPanel() {
           const missingList: {season: number; episode: number}[] = s.missing || [];
           const missingCount = missingList.length;
           const missingSet = new Set(missingList.map((m: any) => `${m.season}-${m.episode}`));
+          const showWatched = watchedEps[s.imdb_id] ?? {};
           return (
             <div key={s.title} className="border border-border rounded">
               <button
@@ -159,6 +218,7 @@ function SeriesPanel() {
                       .map((m: any) => m.episode);
                     const allEps = new Set([...se.episodes, ...seasonMissing]);
                     const sorted = Array.from(allEps).sort((a, b) => a - b);
+                    const watchedInSeason = new Set<number>(showWatched[String(se.season)] ?? []);
                     return (
                       <div key={se.season}>
                         <div className="text-xs text-muted mb-1">
@@ -169,35 +229,51 @@ function SeriesPanel() {
                         </div>
                         <div className="flex flex-wrap gap-1">
                           {sorted.map((ep: number) => {
-                            const isWanted = missingSet.has(`${se.season}-${ep}`);
-                            const playable = !isWanted && canPlay && s.imdb_id;
-                            return playable ? (
-                              <button
-                                key={ep}
-                                type="button"
-                                onClick={() => setPlayEp({
-                                  imdb_id: s.imdb_id,
-                                  season: se.season,
-                                  episode: ep,
-                                  title: `${s.title} S${String(se.season).padStart(2,'0')}E${String(ep).padStart(2,'0')}`,
-                                })}
-                                className="text-xs px-2 py-0.5 rounded bg-accent/20 text-accent
-                                           hover:bg-indigo-600 hover:text-white transition-colors"
-                                title="Play in browser"
+                            const isWanted  = missingSet.has(`${se.season}-${ep}`);
+                            const isWatched = watchedInSeason.has(ep);
+                            const playable  = !isWanted && canPlay && s.imdb_id;
+                            const label = `E${String(ep).padStart(2, '0')}`;
+
+                            if (isWanted) {
+                              return (
+                                <span key={ep}
+                                  className="text-xs px-2 py-0.5 rounded bg-red-500/20 text-red-400"
+                                  title="Wanted - not yet cached"
+                                >
+                                  {label}
+                                </span>
+                              );
+                            }
+                            if (playable) {
+                              return (
+                                <button
+                                  key={ep}
+                                  type="button"
+                                  onClick={() => setPlayEp({
+                                    imdb_id: s.imdb_id,
+                                    season: se.season,
+                                    episode: ep,
+                                    title: `${s.title} S${String(se.season).padStart(2,'0')}E${String(ep).padStart(2,'0')}`,
+                                  })}
+                                  className={`text-xs px-2 py-0.5 rounded transition-colors
+                                    ${isWatched
+                                      ? 'bg-green-500/20 text-green-400 hover:bg-green-600 hover:text-white'
+                                      : 'bg-accent/20 text-accent hover:bg-indigo-600 hover:text-white'
+                                    }`}
+                                  title={isWatched ? 'Gezien — speel opnieuw af' : 'Speel af in browser'}
+                                >
+                                  ▶ {label}
+                                </button>
+                              );
+                            }
+                            // available but no webplayer
+                            return (
+                              <span key={ep}
+                                className={`text-xs px-2 py-0.5 rounded
+                                  ${isWatched ? 'bg-green-500/20 text-green-400' : 'bg-accent/20 text-accent'}`}
+                                title={isWatched ? 'Gezien' : 'Available'}
                               >
-                                ▶ E{String(ep).padStart(2, '0')}
-                              </button>
-                            ) : (
-                              <span
-                                key={ep}
-                                className={`text-xs px-2 py-0.5 rounded ${
-                                  isWanted
-                                    ? 'bg-red-500/20 text-red-400'
-                                    : 'bg-accent/20 text-accent'
-                                }`}
-                                title={isWanted ? 'Wanted - not yet cached' : 'Available'}
-                              >
-                                E{String(ep).padStart(2, '0')}
+                                {label}
                               </span>
                             );
                           })}

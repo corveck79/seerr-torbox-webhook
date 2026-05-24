@@ -117,6 +117,18 @@ def trakt_watched():
     return jsonify(imdb_ids=trakt_api.get_watched_imdb_ids(user_id))
 
 
+@bp.get("/ui/api/trakt/watched-episodes")
+def trakt_watched_episodes():
+    rec = _require_user()
+    user_id = rec.get("id")
+    if not user_id:
+        return jsonify(shows={})
+    tok = trakt_api.get_token(user_id)
+    if not tok:
+        return jsonify(shows={})
+    return jsonify(shows=trakt_api.get_watched_episodes(user_id))
+
+
 @bp.post("/ui/api/trakt/sync")
 def trakt_sync():
     rec = _require_user()

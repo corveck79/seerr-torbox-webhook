@@ -7,4 +7,5 @@ import PlayerModal from './PlayerModal'
 
 export const slots: Record<string, React.ComponentType<any>> = {
   'episode-player': PlayerModal,
+  'movie-player':   PlayerModal,
 }

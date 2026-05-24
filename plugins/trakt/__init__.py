@@ -82,6 +82,16 @@ def run_migrations() -> None:
         cols = {r["name"] for r in c.execute("PRAGMA table_info(trakt_watched)")}
         if "tmdb_id" not in cols:
             c.execute("ALTER TABLE trakt_watched ADD COLUMN tmdb_id INTEGER")
+        c.execute("""
+            CREATE TABLE IF NOT EXISTS trakt_watched_episodes (
+                user_id  INTEGER NOT NULL,
+                imdb_id  TEXT    NOT NULL,
+                season   INTEGER NOT NULL,
+                episode  INTEGER NOT NULL,
+                PRIMARY KEY (user_id, imdb_id, season, episode),
+                FOREIGN KEY (user_id) REFERENCES users(id)
+            )
+        """)
 
 
 def session_data(user_record: dict) -> dict:
