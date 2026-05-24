@@ -10,6 +10,7 @@ export default function SubtitlePicker({ token, onSelect }: {
     queryKey: ['subtitles', token],
     queryFn:  () => fetch(`/stream/${token}/subtitles`).then(r => r.json()),
     enabled:  !!token,
+    refetchInterval: q => (q.state.data?.subtitles?.length ? false : 3000),
   })
 
   const subs = data?.subtitles ?? []
