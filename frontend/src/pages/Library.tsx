@@ -112,7 +112,7 @@ function MovieTable({
                       <span>{m.title}</span>
                       {isWatched && (
                         <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-500/20 text-green-400 font-medium">
-                          gezien
+                          watched
                         </span>
                       )}
                     </div>
@@ -128,7 +128,7 @@ function MovieTable({
                         onClick={() => onPlay({ imdb_id: m.imdb_id, title: m.title })}
                         className="text-xs px-2 py-0.5 rounded bg-accent/20 text-accent
                                    hover:bg-indigo-600 hover:text-white transition-colors"
-                        title="Speel af in browser"
+                        title="Play in browser"
                       >
                         ▶ Play
                       </button>
@@ -260,7 +260,7 @@ function SeriesPanel() {
                                       ? 'bg-green-500/20 text-green-400 hover:bg-green-600 hover:text-white'
                                       : 'bg-accent/20 text-accent hover:bg-indigo-600 hover:text-white'
                                     }`}
-                                  title={isWatched ? 'Gezien — speel opnieuw af' : 'Speel af in browser'}
+                                  title={isWatched ? 'Watched — play again' : 'Play in browser'}
                                 >
                                   ▶ {label}
                                 </button>
@@ -271,7 +271,7 @@ function SeriesPanel() {
                               <span key={ep}
                                 className={`text-xs px-2 py-0.5 rounded
                                   ${isWatched ? 'bg-green-500/20 text-green-400' : 'bg-accent/20 text-accent'}`}
-                                title={isWatched ? 'Gezien' : 'Available'}
+                                title={isWatched ? 'Watched' : 'Available'}
                               >
                                 {label}
                               </span>
