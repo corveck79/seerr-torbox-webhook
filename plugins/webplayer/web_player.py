@@ -25,7 +25,8 @@ SEGMENT_WAIT_COUNT   = 3
 SEGMENT_WAIT_TIMEOUT = 45
 SESSION_IDLE_CLEANUP = 1800
 
-_BROWSER_AUDIO_OK = {"aac", "vorbis", "opus"}
+_BROWSER_AUDIO_OK    = {"aac"}   # vorbis/opus not reliable in mpegts HLS
+_AAC_SAMPLE_RATE     = "48000"   # browsers require consistent sample rate in TS
 _TEXT_SUB_CODECS  = {"subrip", "ass", "ssa", "webvtt", "mov_text", "srt"}
 
 
@@ -279,10 +280,17 @@ def _start_hls(token: str, cdn_url: str, file_info: dict, tmp_dir: Path) -> HLSS
     audio_args: list[str] = []
     for i, track in enumerate(file_info["audio_tracks"]):
         audio_args += ["-map", f"0:a:{i}"]
-        if track["codec"] in _BROWSER_AUDIO_OK:
+        if track["codec"] in _BROWSER_AUDIO_OK and track.get("channels", 2) <= 2:
+            # AAC stereo/mono: copy as-is
             audio_args += [f"-c:a:{i}", "copy"]
         else:
-            audio_args += [f"-c:a:{i}", "aac", f"-b:a:{i}", "192k"]
+            # Re-encode to AAC stereo at 48 kHz — required for mpegts HLS in browsers
+            audio_args += [
+                f"-c:a:{i}", "aac",
+                f"-ar:{i}", _AAC_SAMPLE_RATE,
+                f"-ac:{i}", "2",
+                f"-b:a:{i}", "192k",
+            ]
 
     cmd = [
         "ffmpeg", "-y",

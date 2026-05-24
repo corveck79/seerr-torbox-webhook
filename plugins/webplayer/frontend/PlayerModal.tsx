@@ -83,8 +83,12 @@ export default function PlayerModal({ imdb_id, media_type, title, season, episod
     if (Hls.isSupported()) {
       const hls = new Hls({ enableWorker: false })
       hls.on(Hls.Events.ERROR, (_e, data) => {
-        if (data.fatal) {
-          console.error('HLS fatal error:', data.type, data.details, data)
+        if (!data.fatal) return
+        console.error('HLS fatal error:', data.type, data.details, data)
+        if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
+          hls.recoverMediaError()
+        } else {
+          hls.destroy()
         }
       })
       hls.attachMedia(video)
