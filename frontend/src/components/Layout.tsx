@@ -1,5 +1,5 @@
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
-import { useState, useRef } from 'react';
+import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api';
 
@@ -20,7 +20,6 @@ const adminItems = [
 
 export default function Layout() {
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [showPasswordModal, setShowPasswordModal] = useState(false);
   const location = useLocation();
   const { data: session } = useQuery({
     queryKey: ['session'],
@@ -69,20 +68,7 @@ export default function Layout() {
         <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-border text-xs text-muted">
           {session?.user ? (
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-1.5">
-                <span>👤 {session.user.username}</span>
-                <button
-                  type="button"
-                  onClick={() => setShowPasswordModal(true)}
-                  className="hover:text-white transition p-0.5"
-                  title="Account settings"
-                >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <circle cx="12" cy="12" r="3"/>
-                    <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/>
-                  </svg>
-                </button>
-              </div>
+              <span>👤 {session.user.username}</span>
               <a href="/logout" className="hover:text-white">Log out</a>
             </div>
           ) : (
@@ -91,10 +77,6 @@ export default function Layout() {
           <div className="mt-2 text-center text-[10px] opacity-50">v0.2.0-beta</div>
         </div>
       </aside>
-      {showPasswordModal && (
-        <PasswordModal onClose={() => setShowPasswordModal(false)} />
-      )}
-
       {/* Drawer overlay */}
       {drawerOpen && (
         <div
@@ -278,96 +260,3 @@ function Breadcrumb({ path }: { path: string }) {
   return <h1 className="font-semibold text-lg">{title}</h1>;
 }
 
-function PasswordModal({ onClose }: { onClose: () => void }) {
-  const [current, setCurrent] = useState('');
-  const [password, setPassword] = useState('');
-  const [confirm, setConfirm] = useState('');
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState(false);
-  const mutation = useMutation({
-    mutationFn: () => api.changePassword(current, password),
-    onSuccess: () => {
-      setSuccess(true);
-      setTimeout(onClose, 1500);
-    },
-    onError: (e: any) => {
-      setError(e.message || 'Failed to change password');
-    },
-  });
-
-  const submit = (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
-    if (password.length < 6) {
-      setError('Password must be at least 6 characters');
-      return;
-    }
-    if (password !== confirm) {
-      setError('Passwords do not match');
-      return;
-    }
-    mutation.mutate();
-  };
-
-  return (
-    <div
-      className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4"
-      onClick={(e) => e.target === e.currentTarget && onClose()}
-    >
-      <div className="bg-card border border-border rounded-xl shadow-2xl w-full max-w-sm p-6">
-        <h2 className="text-lg font-bold mb-4">Change password</h2>
-        {success ? (
-          <div className="text-ok text-sm py-4">Password changed successfully.</div>
-        ) : (
-          <form onSubmit={submit} className="space-y-3">
-            <div>
-              <label className="block text-xs text-muted mb-1">Current password</label>
-              <input
-                type="password"
-                value={current}
-                onChange={(e) => setCurrent(e.target.value)}
-                className="w-full bg-bg border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-accent"
-                autoFocus
-              />
-            </div>
-            <div>
-              <label className="block text-xs text-muted mb-1">New password</label>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full bg-bg border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-accent"
-              />
-            </div>
-            <div>
-              <label className="block text-xs text-muted mb-1">Confirm new password</label>
-              <input
-                type="password"
-                value={confirm}
-                onChange={(e) => setConfirm(e.target.value)}
-                className="w-full bg-bg border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-accent"
-              />
-            </div>
-            {error && <p className="text-danger text-xs">{error}</p>}
-            <div className="flex gap-2 pt-1">
-              <button
-                type="submit"
-                disabled={mutation.isPending}
-                className="px-4 py-2 rounded-lg bg-accent hover:bg-accent/90 disabled:opacity-60 font-semibold text-sm"
-              >
-                {mutation.isPending ? 'Saving...' : 'Change password'}
-              </button>
-              <button
-                type="button"
-                onClick={onClose}
-                className="px-4 py-2 rounded-lg border border-border hover:bg-bg text-sm"
-              >
-                Cancel
-              </button>
-            </div>
-          </form>
-        )}
-      </div>
-    </div>
-  );
-}

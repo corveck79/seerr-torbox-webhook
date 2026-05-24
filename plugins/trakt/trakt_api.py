@@ -223,15 +223,16 @@ def _fetch_watched(access_token: str, kind: str) -> list[dict]:
 
 
 def upsert_watched(user_id: int, imdb_id: str, media_type: str,
-                   watched_at: str | None = None) -> None:
+                   watched_at: str | None = None, tmdb_id: int | None = None) -> None:
     with db._connect() as c:
         c.execute(
-            """INSERT INTO trakt_watched (user_id, imdb_id, media_type, watched_at)
-               VALUES (?, ?, ?, ?)
+            """INSERT INTO trakt_watched (user_id, imdb_id, tmdb_id, media_type, watched_at)
+               VALUES (?, ?, ?, ?, ?)
                ON CONFLICT(user_id, imdb_id) DO UPDATE SET
+                   tmdb_id    = COALESCE(excluded.tmdb_id, tmdb_id),
                    media_type = excluded.media_type,
                    watched_at = COALESCE(excluded.watched_at, watched_at)""",
-            (user_id, imdb_id, media_type, watched_at),
+            (user_id, imdb_id, tmdb_id, media_type, watched_at),
         )
 
 
@@ -248,17 +249,21 @@ def sync_user_watched(user_id: int, access_token: str) -> int:
     synced = 0
     for item in _fetch_watched(access_token, "movies"):
         m = item.get("movie", {})
-        imdb_id = m.get("ids", {}).get("imdb")
+        ids = m.get("ids", {})
+        imdb_id = ids.get("imdb")
         if not imdb_id:
             continue
-        upsert_watched(user_id, imdb_id, "movie", item.get("last_watched_at"))
+        upsert_watched(user_id, imdb_id, "movie", item.get("last_watched_at"),
+                       tmdb_id=ids.get("tmdb"))
         synced += 1
     for item in _fetch_watched(access_token, "shows"):
         s = item.get("show", {})
-        imdb_id = s.get("ids", {}).get("imdb")
+        ids = s.get("ids", {})
+        imdb_id = ids.get("imdb")
         if not imdb_id:
             continue
-        upsert_watched(user_id, imdb_id, "tv", item.get("last_watched_at"))
+        upsert_watched(user_id, imdb_id, "tv", item.get("last_watched_at"),
+                       tmdb_id=ids.get("tmdb"))
         synced += 1
     return synced
 

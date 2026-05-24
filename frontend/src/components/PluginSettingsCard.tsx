@@ -8,7 +8,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { PluginMeta, PluginSettingsUi } from '../hooks/usePlugins'
 import { api } from '../api'
 
-export default function PluginSettingsCard({ plugin }: { plugin: PluginMeta }) {
+export default function PluginSettingsCard({ plugin, embedded }: { plugin: PluginMeta; embedded?: boolean }) {
   const ui = plugin.settings_ui!
   const qc = useQueryClient()
 
@@ -31,15 +31,8 @@ export default function PluginSettingsCard({ plugin }: { plugin: PluginMeta }) {
     qc.invalidateQueries({ queryKey: ['session'] })
   }
 
-  return (
-    <div className="bg-card rounded-lg border border-border p-6">
-      <div className="flex items-center gap-3 mb-4">
-        <div>
-          <h2 className="text-base font-bold leading-tight">{plugin.label}</h2>
-          <p className="text-muted text-xs">{plugin.description}</p>
-        </div>
-      </div>
-
+  const inner = (
+    <>
       {ui.config_gate && !configured && status !== undefined && (
         isAdmin ? (
           <ConfigGateAlert
@@ -72,9 +65,27 @@ export default function PluginSettingsCard({ plugin }: { plugin: PluginMeta }) {
           <ActionButton
             key={action.label}
             action={action}
+            onSuccess={() => {
+              qc.invalidateQueries({ queryKey: ['trakt-watched'] })
+              qc.invalidateQueries({ queryKey: ['watchlist'] })
+            }}
           />
         )
       })}
+    </>
+  )
+
+  if (embedded) return inner
+
+  return (
+    <div className="bg-card rounded-lg border border-border p-6">
+      <div className="flex items-center gap-3 mb-4">
+        <div>
+          <h2 className="text-base font-bold leading-tight">{plugin.label}</h2>
+          <p className="text-muted text-xs">{plugin.description}</p>
+        </div>
+      </div>
+      {inner}
     </div>
   )
 }
@@ -228,7 +239,10 @@ function OAuthDeviceSection({ spec, configured, connected, username, syncedAt, o
 
 // ── Action button ──────────────────────────────────────────────────────────────
 
-function ActionButton({ action }: { action: NonNullable<PluginSettingsUi['actions']>[number] }) {
+function ActionButton({ action, onSuccess }: {
+  action: NonNullable<PluginSettingsUi['actions']>[number]
+  onSuccess?: () => void
+}) {
   const [result, setResult] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
@@ -245,6 +259,7 @@ function ActionButton({ action }: { action: NonNullable<PluginSettingsUi['action
       if (action.success_template && action.success_key != null) {
         setResult(action.success_template.replace(`{${action.success_key}}`, data[action.success_key] ?? ''))
       }
+      onSuccess?.()
     } catch (e: any) {
       setResult(`Error: ${e.message}`)
     } finally {

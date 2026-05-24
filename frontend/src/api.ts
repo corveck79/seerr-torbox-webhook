@@ -214,7 +214,9 @@ export const api = {
   traktRevoke: () =>
     http<{ ok: boolean }>('/ui/api/trakt/auth/revoke', { method: 'POST' }),
   traktSync: () =>
-    http<{ ok: boolean; added: number; watched: number }>('/ui/api/trakt/sync', { method: 'POST' }),
+    http<{ ok: boolean; added: number }>('/ui/api/trakt/sync', { method: 'POST' }),
+  traktSyncWatched: () =>
+    http<{ ok: boolean; watched: number }>('/ui/api/trakt/sync-watched', { method: 'POST' }),
   traktWatched: () =>
     http<{ imdb_ids: string[] }>('/ui/api/trakt/watched'),
   traktScrobble: (params: {

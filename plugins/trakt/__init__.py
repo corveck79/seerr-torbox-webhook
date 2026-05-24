@@ -33,12 +33,20 @@ PLUGIN_META = {
         # actions: buttons rendered when show_if field is truthy
         "actions": [
             {
-                "label":            "↻ Sync watchlist now",
+                "label":            "↻ Sync watchlist",
                 "url":              "/ui/api/trakt/sync",
                 "method":           "POST",
                 "show_if":          "connected",
                 "success_key":      "added",
-                "success_template": "✓ {added} items added",
+                "success_template": "✓ {added} items synced",
+            },
+            {
+                "label":            "↻ Sync watched",
+                "url":              "/ui/api/trakt/sync-watched",
+                "method":           "POST",
+                "show_if":          "connected",
+                "success_key":      "watched",
+                "success_template": "✓ {watched} titles synced",
             },
         ],
     },
@@ -63,12 +71,17 @@ def run_migrations() -> None:
             CREATE TABLE IF NOT EXISTS trakt_watched (
                 user_id    INTEGER NOT NULL,
                 imdb_id    TEXT    NOT NULL,
+                tmdb_id    INTEGER,
                 media_type TEXT    NOT NULL DEFAULT 'movie',
                 watched_at TEXT,
                 PRIMARY KEY (user_id, imdb_id),
                 FOREIGN KEY (user_id) REFERENCES users(id)
             )
         """)
+        # Add tmdb_id column if it doesn't exist yet (upgrade path)
+        cols = {r["name"] for r in c.execute("PRAGMA table_info(trakt_watched)")}
+        if "tmdb_id" not in cols:
+            c.execute("ALTER TABLE trakt_watched ADD COLUMN tmdb_id INTEGER")
 
 
 def session_data(user_record: dict) -> dict:

@@ -1285,7 +1285,7 @@ _STATUS_PRIORITY = {"success": 0, "available": 0, "wanted": 1, "pending": 2, "up
 
 
 def _enrich_library_status(items: list[dict]) -> None:
-    """Add library_status to TMDB result dicts by checking all tables with tmdb_id."""
+    """Add library_status and imdb_id to TMDB result dicts by checking all tables with tmdb_id."""
     tmdb_ids = [it["tmdb_id"] for it in items if it.get("tmdb_id")]
     if not tmdb_ids:
         return
@@ -1306,14 +1306,35 @@ def _enrich_library_status(items: list[dict]) -> None:
             FROM user_requests ur LEFT JOIN requests r ON r.imdb_id = ur.imdb_id
             WHERE ur.tmdb_id IN ({ph})
         """, tmdb_ids * 4).fetchall()
+        # Fetch imdb_ids from library so PosterCard can show watched badges
+        imdb_rows = conn.execute(
+            f"SELECT tmdb_id, imdb_id FROM requests WHERE tmdb_id IN ({ph}) AND imdb_id IS NOT NULL",
+            tmdb_ids,
+        ).fetchall()
+        # Also from trakt_watched for items watched but not in library
+        rec = auth.current_user_record()
+        trakt_imdb_rows = []
+        if rec and rec.get("id"):
+            try:
+                trakt_imdb_rows = conn.execute(
+                    f"SELECT tmdb_id, imdb_id FROM trakt_watched WHERE user_id=? AND tmdb_id IN ({ph}) AND imdb_id IS NOT NULL",
+                    [rec["id"]] + tmdb_ids,
+                ).fetchall()
+            except Exception:
+                pass
     status_map: dict[int, str] = {}
     for r in rows:
         tid, st = r["tmdb_id"], r["status"]
         prev = status_map.get(tid)
         if prev is None or _STATUS_PRIORITY.get(st, 9) < _STATUS_PRIORITY.get(prev, 9):
             status_map[tid] = st
+    imdb_map = {r["tmdb_id"]: r["imdb_id"] for r in imdb_rows}
+    for r in trakt_imdb_rows:
+        imdb_map.setdefault(r["tmdb_id"], r["imdb_id"])
     for it in items:
         it["library_status"] = status_map.get(it.get("tmdb_id"))
+        if not it.get("imdb_id"):
+            it["imdb_id"] = imdb_map.get(it.get("tmdb_id"))
 
 
 def _user_region() -> str:
@@ -1507,8 +1528,16 @@ def ui_api_watchlist_get():
                 imdb_ids,
             ).fetchall()
             lib_map = {r["imdb_id"]: r["status"] for r in rows}
+            # Enrich poster_path from poster_cache for items missing it
+            poster_rows = conn.execute(
+                f"SELECT imdb_id, poster_path FROM poster_cache WHERE imdb_id IN ({ph})",
+                imdb_ids,
+            ).fetchall()
+            poster_map = {r["imdb_id"]: r["poster_path"] for r in poster_rows}
         for w in items:
             w["library_status"] = lib_map.get(w.get("imdb_id"))
+            if not w.get("poster_path") and w.get("imdb_id"):
+                w["poster_path"] = poster_map.get(w["imdb_id"])
     else:
         for w in items:
             w["library_status"] = None

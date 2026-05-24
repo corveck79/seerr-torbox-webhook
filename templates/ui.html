@@ -852,6 +852,7 @@
     if (name === 'blacklist') refreshBlacklist();
     if (name === 'maintenance') initRepairPagination();
     if (name === 'settings') refreshSettings();
+    if (name === 'users') loadUsersTab();
   }
   document.querySelectorAll('.tab-btn').forEach(btn => {
     btn.addEventListener('click', () => showTab(btn.dataset.tab));

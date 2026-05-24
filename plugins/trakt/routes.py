@@ -127,9 +127,22 @@ def trakt_sync():
     if not tok:
         return jsonify(error="Not connected to Trakt"), 400
     tok = trakt_api.refresh_if_needed(tok)
-    wl = trakt_api.sync_user_watchlist(user_id, tok["access_token"])
+    added = trakt_api.sync_user_watchlist(user_id, tok["access_token"])
+    return jsonify(ok=True, added=added)
+
+
+@bp.post("/ui/api/trakt/sync-watched")
+def trakt_sync_watched():
+    rec = _require_user()
+    user_id = rec.get("id")
+    if not user_id:
+        abort(401)
+    tok = trakt_api.get_token(user_id)
+    if not tok:
+        return jsonify(error="Not connected to Trakt"), 400
+    tok = trakt_api.refresh_if_needed(tok)
     watched = trakt_api.sync_user_watched(user_id, tok["access_token"])
-    return jsonify(ok=True, added=wl, watched=watched)
+    return jsonify(ok=True, watched=watched)
 
 
 @bp.post("/ui/api/trakt/scrobble")
