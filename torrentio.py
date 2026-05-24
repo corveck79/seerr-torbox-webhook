@@ -41,7 +41,6 @@ _BLURAY_RE = re.compile(r"\b(bluray|blu-ray|bdrip|brrip)\b", re.IGNORECASE)
 _CAM_RE = re.compile(r"\b(cam|camrip|hdcam|ts|telesync|hdts|scr|screener|dvdscr|workprint|r5)\b", re.IGNORECASE)
 _WEBDL_RE = re.compile(r"\b(web-?dl|webrip|web)\b", re.IGNORECASE)
 _HEVC_RE  = re.compile(r"\b(hevc|x265|h\.?265)\b", re.IGNORECASE)
-_AV1_RE   = re.compile(r"\b(av1|vp9|vp8)\b", re.IGNORECASE)
 # Dolby Vision without an HDR10 base layer (Profile 5). The release name has
 # DV/DoVi but no HDR10 keyword alongside it. Profile 8 (DV + HDR10) is safe
 # and is NOT matched here.

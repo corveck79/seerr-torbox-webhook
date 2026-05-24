@@ -1,5 +1,6 @@
 import json
 import logging
+import re
 import shutil
 import subprocess
 import threading
@@ -27,6 +28,7 @@ SEGMENT_WAIT_TIMEOUT = 45
 SESSION_IDLE_CLEANUP = 1800
 
 _BROWSER_AUDIO_OK    = {"aac"}   # vorbis/opus not reliable in mpegts HLS
+_NO_BROWSER_VIDEO_RE = re.compile(r"\b(av1|vp9|vp8)\b", re.IGNORECASE)
 _AAC_SAMPLE_RATE     = "48000"   # browsers require consistent sample rate in TS
 _TEXT_SUB_CODECS  = {"subrip", "ass", "ssa", "webvtt", "mov_text", "srt"}
 
@@ -37,7 +39,7 @@ def _web_score(stream: torrentio.TorrentioStream) -> int:
     blob = f"{stream.name} {stream.title}"
     if stream.quality == "2160p":           return -1  # 4K: too large for streaming
     if torrentio._DV_RE.search(blob):      return -1  # Dolby Vision: browser-incompatible
-    if torrentio._AV1_RE.search(blob):     return -1  # AV1/VP9/VP8: no browser HLS support
+    if _NO_BROWSER_VIDEO_RE.search(blob):  return -1  # AV1/VP9/VP8: no browser HLS support
 
     max_gb = _settings.get("WEB_PLAYER_MAX_SIZE_GB", 15) or 15
     if 0 < stream.size_gb > max_gb:
