@@ -38,12 +38,17 @@ def _web_score(stream: torrentio.TorrentioStream) -> int:
     if stream.quality == "2160p":          return -1   # 4K: too large + browser issues
     if torrentio._DV_RE.search(blob):     return -1   # Dolby Vision: browser-incompatible
 
-    # Hard size cap — configurable, default 15 GB.
-    max_gb = _settings.get("WEB_PLAYER_MAX_SIZE_GB", 15) or 15
-    if 0 < stream.size_gb > max_gb:
-        return -1
-
     is_hevc = bool(torrentio._HEVC_RE.search(blob))
+
+    # Hard size caps.
+    # H.264: 15 GB default (covers all common WEB-DL releases).
+    # HEVC:  4 GB default — larger x265 files need heavy CPU transcoding
+    #        on a NAS and are rarely worth it vs a smaller H.264 pick.
+    max_gb      = _settings.get("WEB_PLAYER_MAX_SIZE_GB", 15) or 15
+    max_gb_hevc = _settings.get("WEB_PLAYER_MAX_SIZE_HEVC_GB", 4) or 4
+    hard_limit  = max_gb_hevc if is_hevc else max_gb
+    if 0 < stream.size_gb > hard_limit:
+        return -1
 
     score = 0
     if stream.quality == "1080p":                     score += 100
