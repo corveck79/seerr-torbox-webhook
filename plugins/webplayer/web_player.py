@@ -12,11 +12,10 @@ from pathlib import Path
 
 import requests as req_lib
 
-import catbox
-import db
 import health_cache
 import settings as _settings
 import subtitles as _subtitles
+import torbox
 import torrentio
 import zilean
 
@@ -110,7 +109,6 @@ class PrepareJob:
     episode:    int | None
     status:     JobStatus = JobStatus.SEARCHING
     message:    str = ""
-    token:      str | None = None
     stream_url: str | None = None
     cdn_url:    str | None = None
     file_info:  dict | None = None
@@ -143,46 +141,108 @@ def get_job(job_id: str) -> PrepareJob | None:
 
 # ── Pipeline ───────────────────────────────────────────────────────────────────
 
+def _get_cdn_url(stream: torrentio.TorrentioStream) -> str | None:
+    """Resolve a TorrentioStream to a TorBox CDN URL.
+
+    1. Check if TorBox already has the hash (instant).
+    2. If not, add the magnet and wait until ready.
+    Returns None on failure.
+    """
+    item = torbox.find_by_hash(stream.info_hash)
+    if item is None:
+        log.info("web_player: adding magnet to TorBox hash=%s", stream.info_hash)
+        try:
+            result = torbox.add_magnet(stream.magnet, reason="web_player")
+        except torbox.RateLimited:
+            log.warning("web_player: TorBox rate-limited on add_magnet")
+            return None
+        torrent_id = (result or {}).get("torrent_id") or (result or {}).get("id")
+        item = torbox.wait_until_ready(stream.info_hash, timeout=600,
+                                       torrent_id=torrent_id)
+    else:
+        if not torbox._is_ready(item):
+            item = torbox.wait_until_ready(stream.info_hash, timeout=600,
+                                           torrent_id=item.get("id"))
+
+    if not item:
+        return None
+
+    torrent_id = item.get("id")
+    files      = item.get("files") or []
+    if not files:
+        fresh = torbox.find_by_id(torrent_id)
+        files = (fresh or {}).get("files") or []
+
+    if not files:
+        return None
+
+    # Pick the largest non-trailer video file.
+    _VIDEO_EXT = {".mkv", ".mp4", ".avi", ".mov", ".m4v", ".ts"}
+    videos = [f for f in files
+              if Path(f.get("name") or "").suffix.lower() in _VIDEO_EXT]
+    if not videos:
+        videos = files
+    main    = max(videos, key=lambda f: f.get("size") or 0)
+    file_id = main.get("id")
+
+    return _request_dl(torrent_id, file_id)
+
+
+def _request_dl(torrent_id: int, file_id: int) -> str | None:
+    """Call TorBox requestdl and return the CDN URL."""
+    import config as _config
+    base = (_settings.get("TORBOX_BASE_URL") or _config.TORBOX_BASE_URL).rstrip("/")
+    url  = f"{base}/torrents/requestdl"
+    params = {
+        "token":      _settings.get("TORBOX_API_KEY") or _config.TORBOX_API_KEY,
+        "torrent_id": torrent_id,
+        "file_id":    file_id,
+        "zip_link":   "false",
+    }
+    try:
+        resp = req_lib.get(url, params=params, timeout=15)
+        resp.raise_for_status()
+        return (resp.json() or {}).get("data") or None
+    except Exception as exc:
+        log.warning("web_player: requestdl failed: %s", exc)
+        return None
+
+
 def _run_job(job: PrepareJob) -> None:
     try:
         job.status  = JobStatus.SEARCHING
         job.message = "Looking for a web-compatible version…"
 
-        existing = _db_get_web_player_token(job.imdb_id, job.season, job.episode)
-        if existing:
-            token = existing["token"]
-        else:
-            candidates = find_web_candidates(
-                job.imdb_id, job.media_type, job.season, job.episode
-            )
-            if not candidates:
-                job.status = JobStatus.ERROR
-                job.error  = "No web-compatible version found. Use Jellyfin."
-                return
+        candidates = find_web_candidates(
+            job.imdb_id, job.media_type, job.season, job.episode
+        )
+        if not candidates:
+            job.status = JobStatus.ERROR
+            job.error  = "No web-compatible version found. Use Jellyfin."
+            return
 
-            best = candidates[0]
-            log.info("web_player: selected %r hash=%s for %s",
-                     best.title, best.info_hash, job.imdb_id)
+        best = candidates[0]
+        log.info("web_player: selected %r hash=%s", best.title, best.info_hash)
 
-            token = catbox.register(
-                info_hash  = best.info_hash,
-                magnet     = best.magnet,
-                title      = best.title,
-                media_type = job.media_type,
-                imdb_id    = job.imdb_id,
-                quality    = best.quality,
-                source     = "web_player",
-                size_gb    = best.size_gb,
-                season     = job.season,
-                episode    = job.episode,
-            )
-
-        job.token = token
+        # Check for a live session keyed by info_hash (avoids re-probing).
+        session_key = best.info_hash
+        with _sessions_lock:
+            existing_session = _sessions.get(session_key)
+        if existing_session and existing_session.proc.poll() is None:
+            log.info("web_player: reusing active session hash=%s", session_key)
+            multi_audio    = len(existing_session.file_info.get("audio_tracks", [])) > 1
+            job.file_info  = existing_session.file_info
+            job.cdn_url    = existing_session.cdn_url
+            job.status     = JobStatus.READY
+            job.message    = "Ready"
+            job.stream_url = (f"/stream/{session_key}/hls/master.m3u8" if multi_audio
+                              else f"/stream/{session_key}/hls/playlist.m3u8")
+            return
 
         job.status  = JobStatus.MATERIALIZING
         job.message = "Fetching via TorBox…"
 
-        cdn_url = catbox.materialize(token, allow_readd=True)
+        cdn_url = _get_cdn_url(best)
         if not cdn_url:
             job.status = JobStatus.ERROR
             job.error  = "TorBox could not fetch the file."
@@ -190,42 +250,23 @@ def _run_job(job: PrepareJob) -> None:
 
         job.cdn_url = cdn_url
 
-        # Check if we already have a live FFmpeg session for this token.
-        # If so, skip the probe + start steps and go straight to ready.
-        with _sessions_lock:
-            existing_session = _sessions.get(token)
-
-        if existing_session and existing_session.proc.poll() is None:
-            log.info("web_player: reusing active session for token=%s", token)
-            multi_audio = len(existing_session.file_info.get("audio_tracks", [])) > 1
-            job.file_info  = existing_session.file_info
-            job.status     = JobStatus.READY
-            job.message    = "Ready"
-            job.stream_url = (f"/stream/{token}/hls/master.m3u8" if multi_audio
-                              else f"/stream/{token}/hls/playlist.m3u8")
-            return
-
         job.status  = JobStatus.PROBING
         job.message = "Reading file info…"
 
-        file_info = _probe(cdn_url)
+        file_info     = _probe(cdn_url)
         job.file_info = file_info
 
         job.status  = JobStatus.PREPARING
         job.message = "Preparing for playback…"
 
-        tmp_dir = PLAYER_TMP_DIR / token
+        tmp_dir = PLAYER_TMP_DIR / session_key
         tmp_dir.mkdir(parents=True, exist_ok=True)
 
         multi_audio = len(file_info["audio_tracks"]) > 1
-        is_hdr      = file_info.get("is_hdr", False)
-        seg_timeout = 180 if is_hdr else SEGMENT_WAIT_TIMEOUT
-        session     = _start_hls(token, cdn_url, file_info, tmp_dir)
+        session     = _start_hls(session_key, cdn_url, file_info, tmp_dir)
 
-        # For multi-audio, _start_hls already waited for video segments.
-        # For single-audio, wait here.
         if not multi_audio:
-            if not _wait_segments(tmp_dir, SEGMENT_WAIT_COUNT, seg_timeout):
+            if not _wait_segments(tmp_dir, SEGMENT_WAIT_COUNT, SEGMENT_WAIT_TIMEOUT):
                 session.proc.terminate()
                 job.status = JobStatus.ERROR
                 job.error  = "Timeout: FFmpeg produced no segments."
@@ -234,14 +275,14 @@ def _run_job(job: PrepareJob) -> None:
         threading.Thread(
             target=_subtitles_task,
             args=(cdn_url, file_info, job.imdb_id, job.media_type,
-                  job.season, job.episode, token, tmp_dir),
+                  job.season, job.episode, session_key, tmp_dir),
             daemon=True,
         ).start()
 
         job.status     = JobStatus.READY
         job.message    = "Ready"
-        job.stream_url = (f"/stream/{token}/hls/master.m3u8" if multi_audio
-                          else f"/stream/{token}/hls/playlist.m3u8")
+        job.stream_url = (f"/stream/{session_key}/hls/master.m3u8" if multi_audio
+                          else f"/stream/{session_key}/hls/playlist.m3u8")
 
     except Exception:
         log.exception("web_player: prepare job %s crashed", job.job_id)
@@ -403,37 +444,18 @@ def _start_hls(token: str, cdn_url: str, file_info: dict, tmp_dir: Path,
     audio_tracks = file_info["audio_tracks"]
     multi_audio  = len(audio_tracks) > 1
 
-    # Codec routing.
-    # HDR (PQ/HLG): browsers can't tone-map — transcode to SDR H.264 + mpegts.
-    # HEVC SDR:     fMP4 passthrough, Safari/Chrome/Edge hardware decode.
-    # H.264 SDR:    mpegts passthrough, universally supported.
-    # AV1/VP9/VP8:  filtered out at selection time (_web_score), never reach here.
+    # Always copy video — never transcode.
+    # HDR is filtered at selection time (_web_score), AV1/VP9/VP8 likewise.
+    # HEVC -> fMP4 segments (Safari native; Chrome/Edge hardware decode).
+    # H.264 -> mpegts segments (universally supported).
     _FMP4_CODECS = {"hevc", "h265"}
     video_codec  = (file_info.get("video_codec") or "h264").lower()
-    is_hdr       = file_info.get("is_hdr", False)
-    use_fmp4     = (video_codec in _FMP4_CODECS) and not is_hdr
+    use_fmp4     = video_codec in _FMP4_CODECS
 
-    if is_hdr:
-        # Tone-map HDR -> SDR so the browser sees normal BT.709 colours.
-        # zscale is part of libzimg (standard in most FFmpeg builds).
-        _TONEMAP_VF = (
-            "zscale=t=linear:npl=100,"
-            "format=gbrpf32le,"
-            "zscale=p=bt709,"
-            "tonemap=hable:desat=0,"
-            "zscale=t=bt709:m=bt709:r=tv,"
-            "format=yuv420p"
-        )
-        v_enc      = ["-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
-                      "-vf", _TONEMAP_VF]
-        seg_type   = "mpegts"
-        seg_ext    = "ts"
-        mode_label = "hdr-tonemap"
-    else:
-        v_enc      = ["-c:v", "copy"]
-        seg_type   = "fmp4" if use_fmp4 else "mpegts"
-        seg_ext    = "m4s"  if use_fmp4 else "ts"
-        mode_label = "fmp4-copy" if use_fmp4 else "ts-copy"
+    v_enc      = ["-c:v", "copy"]
+    seg_type   = "fmp4" if use_fmp4 else "mpegts"
+    seg_ext    = "m4s"  if use_fmp4 else "ts"
+    mode_label = "fmp4-copy" if use_fmp4 else "ts-copy"
 
     # -ss BEFORE -i = fast keyframe seek.
     input_args = (["-ss", f"{seek_offset:.3f}"] if seek_offset > 0 else []) + ["-i", cdn_url]
@@ -678,18 +700,3 @@ def cleanup_idle_sessions() -> None:
             shutil.rmtree(session.tmp_dir, ignore_errors=True)
             log.info("web_player: cleaned up idle session token=%s", token)
 
-
-# ── DB ─────────────────────────────────────────────────────────────────────────
-
-def _db_get_web_player_token(imdb_id: str,
-                              season: int | None,
-                              episode: int | None) -> dict | None:
-    with db._connect() as c:
-        return c.execute(
-            "SELECT * FROM virtual_items "
-            "WHERE imdb_id=? AND source='web_player' "
-            "  AND (season IS ? OR season=?) "
-            "  AND (episode IS ? OR episode=?) "
-            "LIMIT 1",
-            (imdb_id, season, season, episode, episode),
-        ).fetchone()

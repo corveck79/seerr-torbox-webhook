@@ -31,7 +31,6 @@ interface FileInfo {
 interface JobStatus {
   status:      'searching' | 'materializing' | 'probing' | 'preparing' | 'ready' | 'error'
   message:     string
-  token?:      string
   stream_url?: string
   cdn_url?:    string
   file_info?:  FileInfo
@@ -54,8 +53,12 @@ export default function PlayerModal({ imdb_id, media_type, title, season, episod
   const traktEnabled = !!(session?.user as any)?.trakt_connected
 
   const [jobId,       setJobId]       = useState<string | null>(null)
-  const [token,       setToken]       = useState<string | null>(null)
   const [subtitleUrl, setSubtitleUrl] = useState<string | null>(null)
+
+  // Session key = info_hash, derived from the stream URL path.
+  const sessionKey = status?.stream_url
+    ? status.stream_url.split('/')[2] ?? null
+    : null
   const [jumpMin,     setJumpMin]     = useState('')
   const [jumping,     setJumping]     = useState(false)
 
@@ -81,7 +84,7 @@ export default function PlayerModal({ imdb_id, media_type, title, season, episod
 
   useEffect(() => {
     if (status?.status !== 'ready' || !status.stream_url || !videoRef.current) return
-    setToken(status.token ?? null)
+
     const video = videoRef.current
 
     if (Hls.isSupported()) {
@@ -115,8 +118,8 @@ export default function PlayerModal({ imdb_id, media_type, title, season, episod
     }, { once: true })
 
     saveTimer.current = setInterval(() => {
-      if (token && !video.paused) {
-        fetch(`/stream/${token}/position`, {
+      if (sessionKey && !video.paused) {
+        fetch(`/stream/${sessionKey}/position`, {
           method:  'POST',
           headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken() },
           body:    JSON.stringify({ position_s: video.currentTime, duration_s: video.duration }),
@@ -150,13 +153,13 @@ export default function PlayerModal({ imdb_id, media_type, title, season, episod
   }, [])
 
   const handleJump = async () => {
-    if (!token) return
+    if (!sessionKey) return
     const mins = parseFloat(jumpMin)
     if (isNaN(mins) || mins < 0) return
     const position_s = mins * 60
     setJumping(true)
     try {
-      const r = await fetch(`/stream/${token}/seek`, {
+      const r = await fetch(`/stream/${sessionKey}/seek`, {
         method:  'POST',
         headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken() },
         body:    JSON.stringify({ position_s }),
@@ -270,7 +273,7 @@ export default function PlayerModal({ imdb_id, media_type, title, season, episod
                   </select>
                 )}
 
-                {token && <SubtitlePicker token={token} onSelect={setSubtitleUrl} />}
+                {sessionKey && <SubtitlePicker token={sessionKey} onSelect={setSubtitleUrl} />}
 
                 {/* Native player button — opens the stream in IINA/mpv/VLC
                     via the mycelium:// URL scheme (install once from the link). */}
@@ -302,7 +305,7 @@ export default function PlayerModal({ imdb_id, media_type, title, season, episod
 
                 {/* Jump-to: lets the user seek to any position even before
                     FFmpeg has generated segments that far. */}
-                {token && (
+                {sessionKey && (
                   <span className="ml-auto flex items-center gap-1">
                     <span className="text-zinc-600">Jump to:</span>
                     <input
