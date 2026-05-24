@@ -262,10 +262,13 @@ def _run_job(job: PrepareJob) -> None:
 
             log.info("web_player: selected %r hash=%s", candidate.title, _hash)
 
-            # Reuse an active session without re-probing.
+            # Reuse an active session without re-probing (skip if HDR was detected).
             with _sessions_lock:
                 existing = _sessions.get(_hash)
             if existing and existing.proc.poll() is None:
+                if existing.file_info.get("is_hdr"):
+                    log.warning("web_player: skipping HDR cached session hash=%s", _hash)
+                    continue
                 log.info("web_player: reusing active session hash=%s", _hash)
                 multi_audio   = len(existing.file_info.get("audio_tracks", [])) > 1
                 job.file_info = existing.file_info

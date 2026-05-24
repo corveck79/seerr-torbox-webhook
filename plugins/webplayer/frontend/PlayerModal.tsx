@@ -172,14 +172,18 @@ export default function PlayerModal({ imdb_id, media_type, title, season, episod
 
   useEffect(() => {
     if (!videoRef.current || !subtitleUrl) return
+    const video = videoRef.current
+    // Remove any previous external track
+    Array.from(video.querySelectorAll('track[label="external"]')).forEach(t => t.remove())
     const track = document.createElement('track')
-    track.kind    = 'subtitles'
-    track.label   = 'external'
-    track.src     = subtitleUrl
-    track.default = true
-    Array.from(videoRef.current.querySelectorAll('track[label="external"]'))
-      .forEach(t => t.remove())
-    videoRef.current.appendChild(track)
+    track.kind  = 'subtitles'
+    track.label = 'external'
+    track.src   = subtitleUrl
+    track.addEventListener('load', () => {
+      // Force the track visible after it finishes loading
+      if (track.track) track.track.mode = 'showing'
+    })
+    video.appendChild(track)
   }, [subtitleUrl])
 
   // Derived after status is declared — info_hash is segment [2] of /stream/<hash>/hls/...
