@@ -188,7 +188,9 @@ export default function PlayerModal({ imdb_id, media_type, title, season, episod
         tt.mode = 'showing'
 
         const toSec = (t: string) => {
-          const parts = t.replace(',', '.').split(':').map(Number)
+          // Strip optional VTT cue settings (e.g. "line:80% align:center")
+          const clean = t.trim().split(/\s/)[0].replace(',', '.')
+          const parts = clean.split(':').map(Number)
           return parts.length === 3
             ? parts[0] * 3600 + parts[1] * 60 + parts[2]
             : parts[0] * 60 + parts[1]
@@ -199,7 +201,8 @@ export default function PlayerModal({ imdb_id, media_type, title, season, episod
         while (i < lines.length) {
           const line = lines[i].trim()
           if (line.includes('-->')) {
-            const [startStr, endStr] = line.split('-->').map(s => s.trim())
+            const [startStr, rawEnd] = line.split('-->')
+            const endStr = rawEnd
             const start = toSec(startStr)
             const end   = toSec(endStr)
             i++
