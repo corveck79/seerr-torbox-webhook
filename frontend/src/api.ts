@@ -193,6 +193,35 @@ export const api = {
   deleteRequest: (id: number) =>
     http<{ ok: boolean }>(`/ui/api/requests/${id}/delete`, { method: 'POST' }),
 
+  // Trakt
+  traktStatus: () =>
+    http<{ connected: boolean; username: string | null; synced_at: string | null; configured: boolean }>(
+      '/ui/api/trakt/status'
+    ),
+  traktAuthStart: () =>
+    http<{ user_code: string; verification_url: string; expires_in: number; interval: number }>(
+      '/ui/api/trakt/auth/start', { method: 'POST' }
+    ),
+  traktAuthPoll: () =>
+    http<{ status: string; username?: string; error?: string }>('/ui/api/trakt/auth/poll'),
+  traktRevoke: () =>
+    http<{ ok: boolean }>('/ui/api/trakt/auth/revoke', { method: 'POST' }),
+  traktSync: () =>
+    http<{ ok: boolean; added: number }>('/ui/api/trakt/sync', { method: 'POST' }),
+  traktScrobble: (params: {
+    action: 'start' | 'pause' | 'stop';
+    media_type: string;
+    imdb_id: string;
+    progress: number;
+    season?: number;
+    episode?: number;
+    title?: string;
+  }) =>
+    http<{ ok: boolean }>('/ui/api/trakt/scrobble', {
+      method: 'POST',
+      body: JSON.stringify(params),
+    }),
+
   // Maintenance
   repairStrms: () =>
     http<{ scanned: number; ok: number; orphaned_tokens: number; relinked: number; deleted: number; skipped: number }>(

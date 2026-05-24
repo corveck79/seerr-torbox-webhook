@@ -157,7 +157,7 @@ def current_user_record() -> dict | None:
     if user:
         # Legacy / proxy-auth path: synthesize an admin record
         return {"id": 0, "username": user, "role": "admin", "auto_approve": 1,
-                "quota_monthly": 0, "enabled": 1}
+                "quota_monthly": 0, "enabled": 1, "webplayer_enabled": 1}
     return None
 
 

@@ -6,6 +6,7 @@ __pycache__/
 # React/Vite build artefacts, rebuilt via Dockerfile or `npm run build`
 frontend/node_modules/
 frontend/dist/
+frontend/src/plugins/
 static/app/
 # Runtime data: DB, media, .strm files, backups. NEVER track these: a
 # `git reset --hard` would otherwise wipe the live database.

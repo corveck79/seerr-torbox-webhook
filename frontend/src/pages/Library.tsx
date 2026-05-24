@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useState, Suspense } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../api';
+import { usePluginSlot } from '../hooks/usePluginSlots';
 
 type Tab = 'movies' | 'series';
 
@@ -104,6 +105,13 @@ function SeriesPanel() {
     queryKey: ['library-series-episodes'],
     queryFn: () => fetch('/ui/api/library/series-episodes').then(r => r.json()),
   });
+  const { data: session } = useQuery({ queryKey: ['session'], queryFn: api.session });
+  // webplayer_enabled is injected by the webplayer plugin; absent when plugin not loaded
+  const canPlay = !!(session?.user as any)?.webplayer_enabled;
+  const PlayerModal = usePluginSlot('episode-player');
+  const [playEp, setPlayEp] = useState<{
+    imdb_id: string; season: number; episode: number; title: string
+  } | null>(null);
 
   if (isLoading) return <div className="text-muted">Loading...</div>;
   const series: any[] = data?.series || [];
@@ -117,6 +125,7 @@ function SeriesPanel() {
   };
 
   return (
+    <>
     <div>
       <p className="text-muted text-sm mb-4">{series.length} series in library</p>
       <div className="space-y-1">
@@ -161,7 +170,24 @@ function SeriesPanel() {
                         <div className="flex flex-wrap gap-1">
                           {sorted.map((ep: number) => {
                             const isWanted = missingSet.has(`${se.season}-${ep}`);
-                            return (
+                            const playable = !isWanted && canPlay && s.imdb_id;
+                            return playable ? (
+                              <button
+                                key={ep}
+                                type="button"
+                                onClick={() => setPlayEp({
+                                  imdb_id: s.imdb_id,
+                                  season: se.season,
+                                  episode: ep,
+                                  title: `${s.title} S${String(se.season).padStart(2,'0')}E${String(ep).padStart(2,'0')}`,
+                                })}
+                                className="text-xs px-2 py-0.5 rounded bg-accent/20 text-accent
+                                           hover:bg-indigo-600 hover:text-white transition-colors"
+                                title="Play in browser"
+                              >
+                                ▶ E{String(ep).padStart(2, '0')}
+                              </button>
+                            ) : (
                               <span
                                 key={ep}
                                 className={`text-xs px-2 py-0.5 rounded ${
@@ -186,6 +212,18 @@ function SeriesPanel() {
         })}
       </div>
     </div>
+
+    {playEp && PlayerModal && (
+      <PlayerModal
+        imdb_id={playEp.imdb_id}
+        media_type="tv"
+        title={playEp.title}
+        season={playEp.season}
+        episode={playEp.episode}
+        onClose={() => setPlayEp(null)}
+      />
+    )}
+    </>
   );
 }
 

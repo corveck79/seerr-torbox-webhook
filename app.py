@@ -98,6 +98,9 @@ limiter = Limiter(
 
 db.init()
 
+import plugin_loader
+plugin_loader.load_all(app)
+
 import auth
 import oidc
 auth.install_before_request(app)
@@ -346,6 +349,7 @@ def _start_scheduler() -> BackgroundScheduler:
 
 
 scheduler = _start_scheduler()
+plugin_loader.register_jobs(scheduler)
 
 if CATCHUP_ENABLED:
     catchup.schedule()
@@ -1785,13 +1789,20 @@ def ui_api_session():
     rec = auth.current_user_record()
     if not rec:
         return jsonify(authenticated=False, user=None)
-    return jsonify(authenticated=True, user={
+    user: dict = {
         "id": rec.get("id"),
         "username": rec.get("username"),
         "role": rec.get("role"),
         "auto_approve": bool(rec.get("auto_approve")),
         "region": rec.get("region", "NL"),
-    })
+    }
+    user.update(plugin_loader.session_fields(rec))
+    return jsonify(authenticated=True, user=user)
+
+
+@app.get("/ui/api/plugins")
+def ui_api_plugins():
+    return jsonify(plugins=plugin_loader.loaded_plugins())
 
 
 @app.get("/ui/api/users")
@@ -1843,6 +1854,8 @@ def ui_api_users_update(user_id: int):
     if "auto_approve" in p: fields["auto_approve"] = 1 if p["auto_approve"] else 0
     if "enabled" in p: fields["enabled"] = 1 if p["enabled"] else 0
     if "region" in p: fields["region"] = str(p["region"]).upper()[:5]
+    for field in plugin_loader.user_fields():
+        if field in p: fields[field] = 1 if p[field] else 0
     if p.get("password"):
         if len(p["password"]) < 4:
             return jsonify(error="password too short"), 400

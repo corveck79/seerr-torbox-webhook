@@ -1,4 +1,10 @@
+import { usePlugins } from '../hooks/usePlugins';
+import PluginSettingsCard from '../components/PluginSettingsCard';
+
 export default function Settings() {
+  const { plugins } = usePlugins();
+  const pluginsWithUi = plugins.filter(p => p.settings_ui);
+
   return (
     <div className="space-y-6">
       <div className="bg-card rounded-lg border border-border p-6">
@@ -13,6 +19,10 @@ export default function Settings() {
           Open Settings
         </a>
       </div>
+
+      {pluginsWithUi.map(plugin => (
+        <PluginSettingsCard key={plugin.name} plugin={plugin} />
+      ))}
     </div>
   );
 }
