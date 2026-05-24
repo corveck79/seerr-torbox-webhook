@@ -470,7 +470,8 @@ def _start_hls(token: str, cdn_url: str, file_info: dict, tmp_dir: Path,
 
         log.info("web_player: FFmpeg multi-audio/%s token=%s seek=%.1f",
                  mode_label, token, seek_offset)
-        proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+        stderr_log = open(tmp_dir / "ffmpeg.log", "w")
+        proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=stderr_log)
 
         session = HLSSession(token=token, proc=proc, tmp_dir=tmp_dir,
                              cdn_url=cdn_url, file_info=file_info)
@@ -519,7 +520,8 @@ def _start_hls(token: str, cdn_url: str, file_info: dict, tmp_dir: Path,
 
         log.info("web_player: FFmpeg single-audio/%s token=%s seek=%.1f",
                  mode_label, token, seek_offset)
-        proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+        stderr_log = open(tmp_dir / "ffmpeg.log", "w")
+        proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=stderr_log)
 
         session = HLSSession(token=token, proc=proc, tmp_dir=tmp_dir,
                              cdn_url=cdn_url, file_info=file_info)
