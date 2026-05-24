@@ -12,7 +12,14 @@ export default function Admin() {
   const { data: users } = useQuery({ queryKey: ['users'], queryFn: api.users });
   const { data: session } = useQuery({ queryKey: ['session'], queryFn: api.session });
 
-  const { isLoaded } = usePlugins();
+  const { plugins } = usePlugins();
+  // Collect all user_fields contributed by loaded plugins: [{field, label}]
+  const pluginUserFields = plugins.flatMap(p =>
+    (p.user_fields || []).map(f => ({
+      field: f,
+      label: p.user_field_labels?.[f] ?? f,
+    }))
+  );
   const isBootstrap = !users?.users || users.users.length === 0;
 
   const approveMut = useMutation({
@@ -99,7 +106,9 @@ export default function Admin() {
                 <th className="text-left py-2 px-3">Role</th>
                 <th className="text-left py-2 px-3">Auto-approve</th>
                 <th className="text-left py-2 px-3">Enabled</th>
-                {isLoaded('webplayer') && <th className="text-left py-2 px-3">Web Player</th>}
+                {pluginUserFields.map(({ field, label }) => (
+                  <th key={field} className="text-left py-2 px-3">{label}</th>
+                ))}
                 <th className="text-left py-2 px-3">Last login</th>
                 <th className="text-right py-2 px-3">Action</th>
               </tr>
@@ -121,14 +130,14 @@ export default function Admin() {
                       onClick={() => updateMut.mutate({ id: u.id, fields: { enabled: !u.enabled } })}
                     />
                   </td>
-                  {isLoaded('webplayer') && (
-                    <td className="py-2 px-3">
+                  {pluginUserFields.map(({ field }) => (
+                    <td key={field} className="py-2 px-3">
                       <Toggle
-                        on={u.webplayer_enabled}
-                        onClick={() => updateMut.mutate({ id: u.id, fields: { webplayer_enabled: !u.webplayer_enabled } })}
+                        on={!!(u as any)[field]}
+                        onClick={() => updateMut.mutate({ id: u.id, fields: { [field]: !(u as any)[field] } })}
                       />
                     </td>
-                  )}
+                  ))}
                   <td className="py-2 px-3 text-muted text-xs">{u.last_login || '—'}</td>
                   <td className="py-2 px-3 text-right">
                     {session?.user?.id !== u.id && (

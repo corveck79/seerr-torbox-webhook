@@ -3,7 +3,6 @@ import Hls from 'hls.js'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import SubtitlePicker from './SubtitlePicker'
 import { api } from '../api'
-import { usePlugins } from '../hooks/usePlugins'
 
 const STEP_LABELS: Record<string, string> = {
   searching:     'Zoeken naar web-compatibele versie…',
@@ -45,9 +44,9 @@ export default function PlayerModal({ imdb_id, media_type, title, season, episod
   const videoRef   = useRef<HTMLVideoElement>(null)
   const hlsRef     = useRef<Hls | null>(null)
   const saveTimer  = useRef<ReturnType<typeof setInterval>>()
-  const { isLoaded } = usePlugins()
   const { data: session } = useQuery({ queryKey: ['session'], queryFn: api.session })
-  const traktEnabled = isLoaded('trakt') && (session?.user as any)?.trakt_connected
+  // trakt_connected is only present when the trakt plugin is loaded
+  const traktEnabled = !!(session?.user as any)?.trakt_connected
 
   const [jobId,       setJobId]       = useState<string | null>(null)
   const [token,       setToken]       = useState<string | null>(null)

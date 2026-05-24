@@ -9,6 +9,39 @@ PLUGIN_META = {
     "version":     "1.0.0",
     "description": "Sync watchlist with Trakt.tv and scrobble watch history",
     "user_fields": [],
+    # settings_ui drives the generic PluginSettingsCard renderer in the frontend.
+    # No frontend code changes needed when adding a new plugin — just define this.
+    "settings_ui": {
+        "status_url": "/ui/api/trakt/status",
+        # config_gate: show a warning if this field is falsy in the status response
+        "config_gate": {
+            "field":   "configured",
+            "message": "Create a Trakt app at trakt.tv/oauth/applications, then add "
+                       "TRAKT_CLIENT_ID and TRAKT_CLIENT_SECRET in Admin → Connections settings.",
+            "link":    "https://trakt.tv/oauth/applications",
+            "link_label": "trakt.tv/oauth/applications",
+        },
+        # oauth_device: standard device-auth flow — frontend handles all states
+        "oauth_device": {
+            "connected_field": "connected",
+            "username_field":  "username",
+            "synced_field":    "synced_at",
+            "start_url":  "/ui/api/trakt/auth/start",
+            "poll_url":   "/ui/api/trakt/auth/poll",
+            "revoke_url": "/ui/api/trakt/auth/revoke",
+        },
+        # actions: buttons rendered when show_if field is truthy
+        "actions": [
+            {
+                "label":            "↻ Sync watchlist now",
+                "url":              "/ui/api/trakt/sync",
+                "method":           "POST",
+                "show_if":          "connected",
+                "success_key":      "added",
+                "success_template": "✓ {added} items added",
+            },
+        ],
+    },
 }
 
 

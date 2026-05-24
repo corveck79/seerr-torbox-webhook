@@ -1,7 +1,6 @@
 import { useState, lazy, Suspense } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../api';
-import { usePlugins } from '../hooks/usePlugins';
 
 const PlayerModal = lazy(() => import('../components/PlayerModal'));
 
@@ -107,9 +106,9 @@ function SeriesPanel() {
     queryKey: ['library-series-episodes'],
     queryFn: () => fetch('/ui/api/library/series-episodes').then(r => r.json()),
   });
-  const { isLoaded } = usePlugins();
   const { data: session } = useQuery({ queryKey: ['session'], queryFn: api.session });
-  const canPlay = isLoaded('webplayer') && (session?.user as any)?.webplayer_enabled;
+  // webplayer_enabled is only present when the webplayer plugin is loaded
+  const canPlay = !!(session?.user as any)?.webplayer_enabled;
   const [playEp, setPlayEp] = useState<{
     imdb_id: string; season: number; episode: number; title: string
   } | null>(null);

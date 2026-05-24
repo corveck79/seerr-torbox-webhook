@@ -3,8 +3,6 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, tmdbImg } from '../api';
 import type { MediaType, TmdbItem, WatchlistItem } from '../types';
 import TrailerModal from './TrailerModal';
-import { usePlugins } from '../hooks/usePlugins';
-
 const PlayerModal = lazy(() => import('./PlayerModal'));
 
 export default function DetailModal({
@@ -39,9 +37,9 @@ export default function DetailModal({
     );
 
   const libStatus = detail?.library_status as string | undefined;
-  const { isLoaded } = usePlugins();
   const { data: session } = useQuery({ queryKey: ['session'], queryFn: api.session });
-  const canPlay = isLoaded('webplayer') && (session?.user as any)?.webplayer_enabled;
+  // webplayer_enabled is only present in session when the webplayer plugin is loaded
+  const canPlay = !!(session?.user as any)?.webplayer_enabled;
 
   const [addStatus, setAddStatus] = useState<'idle' | 'adding' | 'added' | 'pending' | 'error'>(
     'idle',
