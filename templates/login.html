@@ -13,8 +13,11 @@
     }
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-           background: var(--bg); color: var(--text); min-height: 100vh;
+           background: var(--bg) url('/assets/jellyfin-splash.png') center/cover no-repeat;
+           color: var(--text); min-height: 100vh;
            display: flex; align-items: center; justify-content: center; padding: 24px; }
+    body::before { content: ''; position: fixed; inset: 0;
+                   background: rgba(5, 8, 14, 0.55); pointer-events: none; }
     .card { background: var(--card); border: 1px solid var(--border);
             border-radius: 16px; padding: 32px; width: 100%; max-width: 380px;
             box-shadow: 0 25px 50px -12px rgba(0,0,0,0.6); }
