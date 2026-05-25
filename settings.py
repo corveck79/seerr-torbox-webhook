@@ -137,6 +137,11 @@ HOT_RELOAD = {
 # Logical groups for the Settings UI tab.
 SETTING_GROUPS = [
     {
+        "id": "mode",
+        "title": "Deployment mode (restart required)",
+        "keys": ["LITE_MODE"],
+    },
+    {
         "id": "connections",
         "title": "Connections",
         "keys": [
@@ -221,11 +226,6 @@ SETTING_GROUPS = [
             "MERGE_VERSIONS_INTERVAL_HOURS", "BACKUP_INTERVAL_HOURS",
             "RETRY_QUEUE_INTERVAL_MINUTES", "CONTINUE_WATCHING_INTERVAL_MINUTES",
         ],
-    },
-    {
-        "id": "mode",
-        "title": "Deployment mode (restart required)",
-        "keys": ["LITE_MODE"],
     },
 ]
 

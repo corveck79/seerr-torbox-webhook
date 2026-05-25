@@ -632,6 +632,69 @@ def setup_test(kind: str):
             )
             return jsonify(ok=r.status_code < 400, detail=f"HTTP {r.status_code}")
 
+        if kind == "trakt":
+            client_id = (f.get("TRAKT_CLIENT_ID") or "").strip()
+            if not client_id:
+                return jsonify(ok=False, error="Client ID empty")
+            r = __import__("requests").get(
+                "https://api.trakt.tv/movies/trending",
+                headers={"trakt-api-key": client_id, "trakt-api-version": "2"},
+                timeout=8,
+            )
+            return jsonify(ok=r.status_code < 400, detail=f"HTTP {r.status_code}")
+
+        if kind == "opensubtitles":
+            api_key = (f.get("OPENSUBTITLES_API_KEY") or "").strip()
+            if not api_key:
+                return jsonify(ok=False, error="API key empty")
+            r = __import__("requests").get(
+                "https://api.opensubtitles.com/api/v1/infos/user",
+                headers={"Api-Key": api_key, "Content-Type": "application/json"},
+                timeout=8,
+            )
+            if r.status_code == 200:
+                data = r.json().get("data", {})
+                remaining = data.get("remaining_downloads", "?")
+                return jsonify(ok=True, detail=f"OK — {remaining} downloads remaining today")
+            return jsonify(ok=r.status_code < 400, detail=f"HTTP {r.status_code}")
+
+        if kind == "zilean":
+            url = (f.get("ZILEAN_URL") or "").rstrip("/")
+            if not url:
+                return jsonify(ok=False, error="URL empty")
+            r = __import__("requests").get(f"{url}/healthcheck", timeout=6)
+            return jsonify(ok=r.status_code < 400, detail=f"HTTP {r.status_code}")
+
+        if kind == "radarr":
+            url = (f.get("RADARR_URL") or "").rstrip("/")
+            api_key = (f.get("RADARR_API_KEY") or "").strip()
+            if not url:
+                return jsonify(ok=False, error="URL empty")
+            r = __import__("requests").get(
+                f"{url}/api/v3/system/status",
+                headers={"X-Api-Key": api_key} if api_key else {},
+                timeout=6,
+            )
+            if r.status_code < 400:
+                version = r.json().get("version", "")
+                return jsonify(ok=True, detail=f"Radarr {version}")
+            return jsonify(ok=False, detail=f"HTTP {r.status_code}")
+
+        if kind == "sonarr":
+            url = (f.get("SONARR_URL") or "").rstrip("/")
+            api_key = (f.get("SONARR_API_KEY") or "").strip()
+            if not url:
+                return jsonify(ok=False, error="URL empty")
+            r = __import__("requests").get(
+                f"{url}/api/v3/system/status",
+                headers={"X-Api-Key": api_key} if api_key else {},
+                timeout=6,
+            )
+            if r.status_code < 400:
+                version = r.json().get("version", "")
+                return jsonify(ok=True, detail=f"Sonarr {version}")
+            return jsonify(ok=False, detail=f"HTTP {r.status_code}")
+
         return jsonify(ok=False, error="unknown test"), 400
     except Exception as exc:
         return jsonify(ok=False, error=str(exc)[:120])

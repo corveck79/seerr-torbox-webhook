@@ -1115,6 +1115,60 @@
       // Track initial values so we can detect restart-required changes
       const restartRequiredInitial = new Map();
       d.groups.forEach(g => {
+        // ── Deployment mode: special top banner ────────────────────────────
+        if (g.id === 'mode') {
+          const modeItem = g.items.find(i => i.key === 'LITE_MODE');
+          if (modeItem) {
+            const isLite = !!modeItem.value;
+            restartRequiredInitial.set('LITE_MODE', isLite ? 'true' : 'false');
+            const card = document.createElement('div');
+            card.className = 'card';
+            card.style.cssText = 'margin-bottom:18px;border:2px solid var(--accent);padding:16px 20px';
+            card.innerHTML = `
+              <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+                <span style="font-size:16px">⚙</span>
+                <span style="font-weight:600;font-size:14px">Deployment Mode</span>
+                <span style="font-size:11px;color:var(--amber)">⚠ restart required</span>
+              </div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
+                <label id="mode-tile-full" style="display:flex;flex-direction:column;gap:6px;padding:12px 14px;border-radius:8px;cursor:pointer;border:2px solid ${isLite ? 'var(--panel2)' : 'var(--accent)'};background:${isLite ? 'transparent' : 'rgba(99,102,241,.08)'}">
+                  <div style="display:flex;align-items:center;gap:8px">
+                    <input type="radio" name="_mode_toggle" value="full" ${isLite ? '' : 'checked'} style="accent-color:var(--accent)">
+                    <span style="font-weight:600;font-size:13px">Full</span>
+                  </div>
+                  <span class="dim" style="font-size:11px;line-height:1.5">Full SPA + all schedulers + plugins (webplayer, trakt). For users who browse and request via the Mycelium interface.</span>
+                </label>
+                <label id="mode-tile-lite" style="display:flex;flex-direction:column;gap:6px;padding:12px 14px;border-radius:8px;cursor:pointer;border:2px solid ${isLite ? 'var(--accent)' : 'var(--panel2)'};background:${isLite ? 'rgba(99,102,241,.08)' : 'transparent'}">
+                  <div style="display:flex;align-items:center;gap:8px">
+                    <input type="radio" name="_mode_toggle" value="lite" ${isLite ? 'checked' : ''} style="accent-color:var(--accent)">
+                    <span style="font-weight:600;font-size:13px">Lite</span>
+                  </div>
+                  <span class="dim" style="font-size:11px;line-height:1.5">Webhook + processor + /admin only. No SPA schedulers, no plugins. For Seerr/Jellyfin-only deployments.</span>
+                </label>
+              </div>
+              <input type="hidden" name="setting_LITE_MODE" id="lite-mode-hidden" value="${isLite ? 'true' : 'false'}">
+            `;
+            // Sync hidden input when radio changes, update tile borders
+            card.querySelectorAll('input[name="_mode_toggle"]').forEach(radio => {
+              radio.addEventListener('change', () => {
+                const lite = radio.value === 'lite';
+                card.querySelector('#lite-mode-hidden').value = lite ? 'true' : 'false';
+                const full = card.querySelector('#mode-tile-full');
+                const liteT = card.querySelector('#mode-tile-lite');
+                full.style.borderColor = lite ? 'var(--panel2)' : 'var(--accent)';
+                full.style.background  = lite ? 'transparent' : 'rgba(99,102,241,.08)';
+                liteT.style.borderColor = lite ? 'var(--accent)' : 'var(--panel2)';
+                liteT.style.background  = lite ? 'rgba(99,102,241,.08)' : 'transparent';
+                // Trigger restart-required banner
+                document.getElementById('settings-form').dispatchEvent(new Event('input'));
+              });
+            });
+            root.appendChild(card);
+          }
+          return; // skip normal rendering for mode group
+        }
+
+        // ── Normal groups ──────────────────────────────────────────────────
         const card = document.createElement('div');
         card.className = 'card';
         card.style.marginBottom = '12px';

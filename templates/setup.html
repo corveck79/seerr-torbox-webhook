@@ -110,17 +110,36 @@
   </div>
 
   <div class="body">
-    <!-- Step 0: welcome -->
+    <!-- Step 0: welcome + deployment mode -->
     <div class="step active" data-step="0">
       <h2>Welcome.</h2>
-      <p class="lede">Mycelium will turn your Seerr requests into Jellyfin-ready streams via TorBox in about 30 seconds. This wizard takes a few minutes; everything is hot-reloadable so nothing is final until you click Finish on the last step.</p>
-      <div class="alert alert-info">If you'd rather edit <code>.env</code> directly, click <b>Skip wizard</b> at the bottom and head to the dashboard.</div>
+      <p class="lede">Mycelium turns Seerr requests into Jellyfin-ready streams via TorBox in about 30 seconds. First, choose how you want to deploy it.</p>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:18px">
+        <label id="wz-tile-full" onclick="setMode(false)" style="display:flex;flex-direction:column;gap:6px;padding:14px;border-radius:8px;cursor:pointer;border:2px solid var(--accent);background:rgba(34,211,238,.07)">
+          <div style="display:flex;align-items:center;gap:8px">
+            <input type="radio" name="_wz_mode" value="full" checked style="accent-color:var(--accent)">
+            <span style="font-weight:700;font-size:13px;color:var(--text-bright)">Full</span>
+          </div>
+          <span style="font-size:11px;color:var(--muted);line-height:1.5">React SPA + auto-scheduler + webplayer + trakt.<br>For users who browse and discover via the Mycelium interface.</span>
+        </label>
+        <label id="wz-tile-lite" onclick="setMode(true)" style="display:flex;flex-direction:column;gap:6px;padding:14px;border-radius:8px;cursor:pointer;border:2px solid var(--border);background:transparent">
+          <div style="display:flex;align-items:center;gap:8px">
+            <input type="radio" name="_wz_mode" value="lite" style="accent-color:var(--accent)">
+            <span style="font-weight:700;font-size:13px;color:var(--text-bright)">Lite</span>
+          </div>
+          <span style="font-size:11px;color:var(--muted);line-height:1.5">Webhook + processor + /admin only. No SPA schedulers, no plugins.<br>For Seerr/Jellyfin-only setups where the SPA is not used.</span>
+        </label>
+      </div>
+      <input type="hidden" id="LITE_MODE" value="false">
+
+      <div class="alert alert-info" style="font-size:12px">If you'd rather edit <code>.env</code> directly, click <b>Skip wizard</b> at the bottom.</div>
     </div>
 
     <!-- Step 1: TorBox -->
     <div class="step" data-step="1">
       <h2>TorBox</h2>
-      <p class="lede">Your TorBox API key. Find it at <code>torbox.app → Settings → API Keys</code>. Without this Mycelium can't do anything.</p>
+      <p class="lede">Your TorBox API key. Without this Mycelium can't do anything. &rarr; <a href="https://app.torbox.app/settings" target="_blank" style="color:var(--accent)">app.torbox.app/settings</a></p>
       <div class="field">
         <label>TorBox API key <span style="color:var(--red)">*</span></label>
         <input type="password" id="TORBOX_API_KEY" placeholder="your-torbox-api-key" required>
@@ -132,7 +151,7 @@
     <!-- Step 2: Jellyfin -->
     <div class="step" data-step="2">
       <h2>Jellyfin</h2>
-      <p class="lede">Optional but recommended. Mycelium triggers library scans after adding new content. Get the API key from <code>Jellyfin → Dashboard → API Keys</code>.</p>
+      <p class="lede">Optional but recommended. Mycelium triggers library scans after adding new content. &rarr; <a href="https://jellyfin.org/docs/general/server/api/" target="_blank" style="color:var(--accent)">Jellyfin → Dashboard → API Keys</a></p>
       <div class="field">
         <label>Jellyfin URL</label>
         <input type="text" id="JELLYFIN_URL" placeholder="http://10.0.0.10:8096">
@@ -148,7 +167,7 @@
     <!-- Step 3: Seerr -->
     <div class="step" data-step="3">
       <h2>Seerr</h2>
-      <p class="lede">Optional but recommended. Used to resolve IMDB IDs for requests that don't include one, and for catch-up sync of approved movies. From <code>Jellyseerr/Overseerr → Settings → General → API Key</code>.</p>
+      <p class="lede">Optional but recommended. Used to resolve IMDB IDs and sync approved movies. &rarr; <a href="https://docs.jellyseerr.dev/using-jellyseerr/settings/general" target="_blank" style="color:var(--accent)">Jellyseerr → Settings → General → API Key</a></p>
       <div class="field">
         <label>Seerr URL</label>
         <input type="text" id="SEERR_URL" placeholder="http://10.0.0.10:5055">
@@ -162,7 +181,7 @@
       <div class="field">
         <label>TMDB API read access token</label>
         <input type="password" id="TMDB_API_KEY" placeholder="optional - starts with 'ey...'">
-        <span class="hint">Free key at <code>themoviedb.org/settings/api</code>. Used for poster lookups and metadata enrichment.</span>
+        <span class="hint">Used for poster lookups and metadata enrichment. &rarr; <a href="https://www.themoviedb.org/settings/api" target="_blank" style="color:var(--accent)">themoviedb.org/settings/api</a></span>
       </div>
     </div>
 
@@ -210,7 +229,7 @@
       <h2>Notifications</h2>
       <p class="lede">Optional. Get pinged on successful adds, failures, deadman alerts, disk-space warnings.</p>
       <div class="field">
-        <label>Discord webhook URL</label>
+        <label>Discord webhook URL &rarr; <a href="https://support.discord.com/hc/en-us/articles/228383668" target="_blank" style="color:var(--accent);font-weight:400;font-size:10px;text-transform:none;letter-spacing:0">how to create</a></label>
         <input type="password" id="DISCORD_WEBHOOK_URL" placeholder="optional">
         <button type="button" class="test-btn" onclick="testConn('discord')">Test connection</button>
         <span id="r-discord" class="test-result"></span>
@@ -227,12 +246,88 @@
       </div>
     </div>
 
-    <!-- Step 7: Done -->
+    <!-- Step 7: Trakt (Full only) -->
     <div class="step" data-step="7">
+      <h2>Trakt</h2>
+      <p class="lede">Trakt scrobbles your watch progress from the web player — keeps your history, ratings and watchlist in sync. &rarr; <a href="https://trakt.tv/oauth/applications/new" target="_blank" style="color:var(--accent)">trakt.tv/oauth/applications/new</a></p>
+      <div class="field">
+        <label>Client ID</label>
+        <input type="text" id="TRAKT_CLIENT_ID" placeholder="optional">
+      </div>
+      <div class="field">
+        <label>Client Secret</label>
+        <input type="password" id="TRAKT_CLIENT_SECRET" placeholder="optional">
+        <button type="button" class="test-btn" onclick="testConn('trakt')">Test Client ID</button>
+        <span id="r-trakt" class="test-result"></span>
+        <span class="hint">After saving, connect your personal Trakt account via the profile menu in the SPA.</span>
+      </div>
+    </div>
+
+    <!-- Step 8: OpenSubtitles (Full only) -->
+    <div class="step" data-step="8">
+      <h2>OpenSubtitles</h2>
+      <p class="lede">Provides subtitle search in the web player. Free tier gives 500 downloads/day, VIP gives 1 000. &rarr; <a href="https://www.opensubtitles.com/consumers" target="_blank" style="color:var(--accent)">opensubtitles.com/consumers</a></p>
+      <div class="field">
+        <label>API key</label>
+        <input type="password" id="OPENSUBTITLES_API_KEY" placeholder="optional">
+        <button type="button" class="test-btn" onclick="testConn('opensubtitles')">Test API key</button>
+        <span id="r-opensubtitles" class="test-result"></span>
+      </div>
+      <div class="field">
+        <label>Subtitle languages</label>
+        <input type="text" id="OPENSUBTITLES_LANGUAGES" placeholder="nl,en">
+        <span class="hint">Comma-separated ISO codes. Tried in order — <code>nl,en</code> prefers Dutch, falls back to English.</span>
+      </div>
+    </div>
+
+    <!-- Step 9: Zilean (Full only) -->
+    <div class="step" data-step="9">
+      <h2>Zilean</h2>
+      <p class="lede">Optional self-hosted torrent index (DMM-based). Faster than Torrentio for content in its index, no rate limits. Leave blank if you don't run one. &rarr; <a href="https://github.com/iPromKnight/zilean" target="_blank" style="color:var(--accent)">github.com/iPromKnight/zilean</a></p>
+      <div class="field">
+        <label>Zilean URL</label>
+        <input type="text" id="ZILEAN_URL" placeholder="http://10.0.0.10:8181">
+        <button type="button" class="test-btn" onclick="testConn('zilean')">Test connection</button>
+        <span id="r-zilean" class="test-result"></span>
+      </div>
+      <label class="check-row" style="margin-top:8px">
+        <input type="checkbox" id="ZILEAN_ENABLED">
+        <span><span class="t">Enable Zilean</span><br><span class="d">Automatically checked when you enter a URL above.</span></span>
+      </label>
+    </div>
+
+    <!-- Step 10: Radarr / Sonarr (Full only) -->
+    <div class="step" data-step="10">
+      <h2>Radarr &amp; Sonarr</h2>
+      <p class="lede">Optional bulk import of your existing Radarr/Sonarr libraries into Mycelium. API key: <a href="https://wiki.servarr.com/radarr/settings#security" target="_blank" style="color:var(--accent)">Radarr → Settings → General → Security</a> — same path in Sonarr.</p>
+      <div class="field">
+        <label>Radarr URL</label>
+        <input type="text" id="RADARR_URL" placeholder="http://10.0.0.10:7878">
+      </div>
+      <div class="field">
+        <label>Radarr API key</label>
+        <input type="password" id="RADARR_API_KEY" placeholder="optional">
+        <button type="button" class="test-btn" onclick="testConn('radarr')">Test Radarr</button>
+        <span id="r-radarr" class="test-result"></span>
+      </div>
+      <div class="field" style="margin-top:10px">
+        <label>Sonarr URL</label>
+        <input type="text" id="SONARR_URL" placeholder="http://10.0.0.10:8989">
+      </div>
+      <div class="field">
+        <label>Sonarr API key</label>
+        <input type="password" id="SONARR_API_KEY" placeholder="optional">
+        <button type="button" class="test-btn" onclick="testConn('sonarr')">Test Sonarr</button>
+        <span id="r-sonarr" class="test-result"></span>
+      </div>
+    </div>
+
+    <!-- Step 11: Done -->
+    <div class="step" data-step="11">
       <h2>All set.</h2>
       <p class="lede">Mycelium will save your settings and take you to the dashboard. Configure Seerr's notifications webhook to point at:</p>
       <div class="alert alert-ok" style="font-family:'JetBrains Mono',monospace;font-size:12px" id="webhook-url"></div>
-      <p class="lede">If you skipped Jellyfin/Seerr API keys, you can add them anytime under <b>Settings → Connections</b>.</p>
+      <p class="lede">Anything you skipped can be added anytime under <b>Settings → Connections</b>.</p>
     </div>
   </div>
 
@@ -246,7 +341,9 @@
 </div>
 
 <script>
-  const STEPS = 8;
+  const STEPS = 12;
+  const LITE_SKIP_FROM = 6; // after Notifications (step 6), jump to Done in Lite
+  const LITE_SKIP_TO   = 11; // Done step
   let step = 0;
   const data = {};
   const CSRF_TOKEN = document.querySelector('meta[name="csrf-token"]')?.content || '';
@@ -260,22 +357,40 @@
     return _origFetch(url, opts);
   };
 
+  function setMode(lite) {
+    document.getElementById('LITE_MODE').value = lite ? 'true' : 'false';
+    const full = document.getElementById('wz-tile-full');
+    const liteT = document.getElementById('wz-tile-lite');
+    full.style.borderColor  = lite ? 'var(--border)' : 'var(--accent)';
+    full.style.background   = lite ? 'transparent' : 'rgba(34,211,238,.07)';
+    liteT.style.borderColor = lite ? 'var(--accent)' : 'var(--border)';
+    liteT.style.background  = lite ? 'rgba(34,211,238,.07)' : 'transparent';
+    full.querySelector('input[type="radio"]').checked  = !lite;
+    liteT.querySelector('input[type="radio"]').checked = lite;
+  }
+
   function render() {
     document.querySelectorAll('.step').forEach(el => el.classList.remove('active'));
     document.querySelector(`[data-step="${step}"]`).classList.add('active');
-    const prog = document.getElementById('progress');
-    prog.innerHTML = '';
-    for (let i = 0; i < STEPS; i++) {
-      const d = document.createElement('div');
-      if (i < step) d.classList.add('done');
-      else if (i === step) d.classList.add('active');
-      prog.appendChild(d);
-    }
     document.getElementById('back-btn').style.display = step === 0 ? 'none' : '';
     const nextBtn = document.getElementById('next-btn');
-    nextBtn.textContent = step === STEPS - 1 ? 'Finish' : 'Next →';
-    if (step === STEPS - 1) {
+    const isDone = step === STEPS - 1;
+    nextBtn.textContent = isDone ? 'Finish' : 'Next →';
+    if (isDone) {
       document.getElementById('webhook-url').textContent = location.origin + '/webhook';
+    }
+    // Progress bar: in Lite mode show fewer segments (skip the 4 Full-only steps)
+    const prog = document.getElementById('progress');
+    prog.innerHTML = '';
+    const totalVisible = isLite() ? STEPS - 4 : STEPS; // 4 Full-only steps hidden
+    const visibleStep  = isLite() && step === LITE_SKIP_TO
+      ? totalVisible - 1
+      : (isLite() && step > LITE_SKIP_FROM ? step : step);
+    for (let i = 0; i < totalVisible; i++) {
+      const d = document.createElement('div');
+      if (i < visibleStep) d.classList.add('done');
+      else if (i === visibleStep) d.classList.add('active');
+      prog.appendChild(d);
     }
   }
 
@@ -285,6 +400,10 @@
       if (el.type === 'checkbox') data[el.id] = el.checked;
       else data[el.id] = el.value.trim();
     });
+  }
+
+  function isLite() {
+    return document.getElementById('LITE_MODE')?.value === 'true';
   }
 
   function goNext() {
@@ -297,12 +416,28 @@
       finish();
       return;
     }
+    // Auto-enable Zilean when URL is filled in
+    if (step === 9) {
+      const urlEl = document.getElementById('ZILEAN_URL');
+      const cbEl  = document.getElementById('ZILEAN_ENABLED');
+      if (urlEl && cbEl && urlEl.value.trim()) cbEl.checked = true;
+    }
     step++;
+    // Skip Full-only steps (7-10) when Lite mode is active
+    if (isLite() && step > LITE_SKIP_FROM && step <= LITE_SKIP_TO - 1) {
+      step = LITE_SKIP_TO;
+    }
     render();
   }
 
   function goBack() {
-    if (step > 0) { step--; render(); }
+    if (step === 0) return;
+    step--;
+    // Skip Full-only steps in reverse when Lite mode is active
+    if (isLite() && step > LITE_SKIP_FROM && step <= LITE_SKIP_TO - 1) {
+      step = LITE_SKIP_FROM;
+    }
+    render();
   }
 
   function skipWizard() {

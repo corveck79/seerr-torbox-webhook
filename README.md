@@ -77,6 +77,36 @@ Built for the **Jellyfin + TorBox** stack. Plex supported via optional WebDAV.
 | **SPA** | `/` | Netflix-style poster grids, per-service browsing, library overview, multi-user, watchlist, request management |
 | **Admin dashboard** | `/admin` | Operations console: overview, requests, blacklist, maintenance, settings, logs. Embedded within the SPA |
 
+### Full vs Lite
+
+One image, two deployment profiles. Choose during the setup wizard or set `LITE_MODE=true` at any time (Settings tab or `.env`).
+
+| Feature | Full | Lite |
+|---|:---:|:---:|
+| **Core — always active** | | |
+| Webhook handler (Seerr / Jellyseerr) | ✅ | ✅ |
+| Processor (torrent search + TorBox) | ✅ | ✅ |
+| STRM generator | ✅ | ✅ |
+| Catbox lazy materialization | ✅ | ✅ |
+| Series monitor + Seerr sync | ✅ | ✅ |
+| Retry queue + DB backup + watchdogs | ✅ | ✅ |
+| Admin dashboard (`/admin`) | ✅ | ✅ |
+| **SPA & plugins — Full only** | | |
+| React SPA (Discover, Library, Watchlist…) | ✅ | ❌ |
+| Landing page | SPA | `/admin` |
+| Web Player (browser streaming) | ✅ | ❌ |
+| Trakt scrobbling | ✅ | ❌ |
+| OpenSubtitles in Web Player | ✅ | ❌ |
+| **Schedulers — Full only** | | |
+| Auto-upgrade quality | ✅ | ❌ |
+| Season-pack consolidation | ✅ | ❌ |
+| Trending / auto-add | ✅ | ❌ |
+| Continue-watching sync | ✅ | ❌ |
+| Jellyfin merge duplicate versions | ✅ | ❌ |
+| **Resources (idle estimate)** | | |
+| Memory | ~290 MB | ~140 MB |
+| CPU | ~1% | ~0% |
+
 ---
 
 ## 🌱 Why Mycelium?
