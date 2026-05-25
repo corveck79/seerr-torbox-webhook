@@ -442,6 +442,13 @@
           <div class="dim" style="margin-bottom:2px">Catbox stream prefix (.strm files contain proxy URLs starting with this)</div>
           <code id="catbox-url" style="display:block;background:var(--panel2);padding:6px 10px;border-radius:4px"></code>
         </div>
+        <div>
+          <div class="dim" style="margin-bottom:4px">Webhook secret &mdash; add to Seerr: Settings &rarr; Notifications &rarr; Webhook &rarr; Header <code>X-Webhook-Secret</code></div>
+          <div style="display:flex;gap:6px;align-items:center">
+            <code id="webhook-secret-val" style="flex:1;display:block;background:var(--panel2);padding:6px 10px;border-radius:4px;filter:blur(4px);cursor:pointer" title="Click to reveal" onclick="this.style.filter=this.style.filter?'':'blur(4px)'">loading...</code>
+            <button onclick="navigator.clipboard.writeText(document.getElementById('webhook-secret-val').textContent)" class="btn btn-secondary btn-sm">Copy</button>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -1243,6 +1250,10 @@
     document.getElementById('seerr-url').textContent = origin + '/webhook';
     document.getElementById('torbox-url').textContent = origin + '/torbox-webhook';
     document.getElementById('catbox-url').textContent = origin + '/stream/<token>';
+    fetch('/ui/api/webhook-secret').then(r => r.json()).then(d => {
+      const el = document.getElementById('webhook-secret-val');
+      if (el) el.textContent = d.secret || '(not set)';
+    }).catch(() => {});
   }
   populateEndpointUrls();
 

@@ -82,11 +82,15 @@ if cfg.AUTH_SESSION_SECRET == "mycelium-please-change-me":
         "Set a random string in your environment for production use.",
         stacklevel=1,
     )
+import secrets as _secrets_mod
 if not WEBHOOK_SECRET:
-    log.warning(
-        "WEBHOOK_SECRET is not set - webhook endpoints are unprotected. "
-        "Set WEBHOOK_SECRET in your environment to secure /webhook and /torbox-webhook."
-    )
+    _stored = _settings_mod.get("WEBHOOK_SECRET_AUTO", "")
+    if not _stored:
+        _stored = _secrets_mod.token_urlsafe(32)
+        _settings_mod.set("WEBHOOK_SECRET_AUTO", _stored)
+        log.info("Auto-generated WEBHOOK_SECRET - copy from Admin > Settings > Webhooks to your Seerr config")
+    else:
+        log.debug("Using auto-generated WEBHOOK_SECRET from settings")
 app.secret_key = cfg.AUTH_SESSION_SECRET
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 app.config["SESSION_COOKIE_HTTPONLY"] = True
@@ -438,8 +442,14 @@ _delayed(45.0, _backfill_tmdb_ids, "tmdb-id-backfill")
 
 # ── Auth ──────────────────────────────────────────────────────────────────────
 
+def _effective_webhook_secret() -> str:
+    """Return the active webhook secret: env var takes priority, else auto-generated."""
+    return WEBHOOK_SECRET or _settings_mod.get("WEBHOOK_SECRET_AUTO", "")
+
+
 def _check_auth() -> None:
-    if not WEBHOOK_SECRET:
+    secret = _effective_webhook_secret()
+    if not secret:
         return
     header_secret = request.headers.get("X-Webhook-Secret")
     query_secret  = request.args.get("secret")
@@ -448,8 +458,8 @@ def _check_auth() -> None:
         # Deprecated: secret in query string leaks via access logs and proxy history.
         # Migrate to the X-Webhook-Secret header.
         log.warning("Webhook secret passed via ?secret= query param from %s"
-                    "  -  migrate to X-Webhook-Secret header", request.remote_addr)
-    if provided != WEBHOOK_SECRET:
+                    " - migrate to X-Webhook-Secret header", request.remote_addr)
+    if provided != secret:
         log.warning("Rejected webhook with bad/missing secret from %s", request.remote_addr)
         abort(401)
 
@@ -903,6 +913,16 @@ def ui_api_series_backfill():
 @app.get("/ui/api/health")
 def ui_api_health():
     return jsonify(services=health.check_all())
+
+
+@app.get("/ui/api/webhook-secret")
+def ui_api_webhook_secret():
+    """Return the effective webhook secret for display in the admin UI. Admin only."""
+    if not auth.is_admin():
+        return jsonify(error="unauthorized"), 401
+    secret = _effective_webhook_secret()
+    source = "env" if WEBHOOK_SECRET else "auto"
+    return jsonify(secret=secret, source=source)
 
 
 @app.get("/ui/api/stats")
