@@ -1,13 +1,14 @@
 # ── Stage 1: compile Mycelium Spore interceptor ──────────────────────────────
-# Must be built against glibc (same ABI as Plex Media Server on Debian/Ubuntu).
-# python:3.12-slim is Debian bookworm - same as Plex's Docker image base.
-FROM python:3.12-slim AS spore-builder
+# Must be built against glibc 2.35 (same ABI as Plex Media Server on Ubuntu 22.04).
+# ubuntu:22.04 has glibc 2.35 - prevents __isoc23_strtoll (glibc 2.38+) symbols.
+FROM ubuntu:22.04 AS spore-builder
 RUN apt-get update && apt-get install -y --no-install-recommends gcc libc-dev \
     && rm -rf /var/lib/apt/lists/*
-COPY spore/spore.c /build/
-RUN gcc -shared -fPIC -O2 -D_GNU_SOURCE -D_LARGEFILE64_SOURCE \
+COPY spore/spore.c spore/spore.map /build/
+RUN gcc -shared -fPIC -O2 -std=gnu11 -D_POSIX_C_SOURCE=200809L -D_LARGEFILE64_SOURCE \
         -o /build/mycelium_spore.so /build/spore.c \
         -ldl -lpthread \
+        -Wl,--version-script=/build/spore.map \
     && strip /build/mycelium_spore.so
 
 # ── Stage 2: build the React + Vite frontend ─────────────────────────────────

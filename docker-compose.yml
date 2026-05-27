@@ -6,6 +6,7 @@ services:
     restart: unless-stopped
     ports:
       - "8088:8088"
+      - "8089:8089"
     env_file:
       - .env
     environment:
@@ -13,6 +14,7 @@ services:
       - LISTEN_PORT=8088
     volumes:
       - ./data:/data
+      - ./static/jellyfin-splash.png:/app/static/jellyfin-splash.png:ro
     healthcheck:
       test: ["CMD", "python", "-c",
              "import urllib.request,sys; r=urllib.request.urlopen('http://127.0.0.1:8088/health',timeout=5); sys.exit(0 if r.status==200 else 1)"]

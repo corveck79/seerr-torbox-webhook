@@ -1157,6 +1157,31 @@ def ui_api_poster(imdb_id: str):
 
 @app.get("/stream/<token>")
 def stream_redirect(token: str):
+    """Jellyfin catbox endpoint: always 302 → CDN. Zero server bandwidth."""
+    import time as _t
+    started = _t.monotonic()
+    ua  = request.headers.get("User-Agent", "?")[:80]
+    rng = request.headers.get("Range", "-")
+    url = catbox.materialize(token)
+    elapsed = _t.monotonic() - started
+    if not url:
+        log.warning("stream: materialize FAILED token=%s ua=%r range=%s (%.1fs)",
+                    token, ua, rng, elapsed)
+        abort(404)
+    log.info("stream: token=%s → 302 CDN (%.1fs) ua=%r range=%s",
+             token, elapsed, ua, rng)
+    return redirect(url, code=302)
+
+
+@app.get("/fstream/<token>")
+def fstream_proxy(token: str):
+    """Plex fast-start proxy: serves moov-first MP4 with Range support.
+
+    On first request the moov cache is empty → falls back to 302 and builds
+    the cache in a background thread. Subsequent requests serve the virtual
+    fast-start layout so Plex/FFmpeg see the moov immediately without seeking
+    15 GB into the file.
+    """
     import time as _t
     import mp4_faststart
 
@@ -1166,58 +1191,52 @@ def stream_redirect(token: str):
 
     url = catbox.materialize(token)
     if not url:
-        log.warning("stream: materialize FAILED token=%s ua=%r range=%s (%.1fs)",
+        log.warning("fstream: materialize FAILED token=%s ua=%r range=%s (%.1fs)",
                     token, ua, rng, _t.monotonic() - started)
         abort(404)
 
-    # Try to serve as a virtual fast-start MP4 (moov first, Range-capable).
-    # On first hit the cache is empty → fall back to 302 and build in background.
     info = mp4_faststart.load(token)
 
     if info is None:
-        # Kick off background cache build so the next request will be fast.
-        cdn_url_snapshot = url
-        tok_snapshot     = token
+        cdn_url_snap = url
+        tok_snap     = token
         threading.Thread(
             target=mp4_faststart.build_and_cache,
-            args=(cdn_url_snapshot, tok_snapshot),
+            args=(cdn_url_snap, tok_snap),
             daemon=True,
-            name=f"fsh-build-{token[:8]}",
+            name=f"fsh-{token[:8]}",
         ).start()
-        log.info("stream: token=%s → 302 (no fast-start cache yet, building) ua=%r",
-                 token, ua)
+        log.info("fstream: token=%s → 302 (building cache) ua=%r", token, ua)
         return redirect(url, code=302)
 
-    # Fast-start cache available: serve as proper streaming MP4 with Range support.
     file_size = info["cdn_size"]
     range_hdr = request.headers.get("Range")
 
     if range_hdr:
         try:
-            unit, ranges_str = range_hdr.split("=", 1)
+            _, ranges_str    = range_hdr.split("=", 1)
             r_start_s, r_end_s = ranges_str.split("-", 1)
             v_start = int(r_start_s) if r_start_s else 0
             v_end   = int(r_end_s)   if r_end_s   else file_size - 1
         except Exception:
             abort(416)
-        v_end   = min(v_end, file_size - 1)
-        status  = 206
+        v_end  = min(v_end, file_size - 1)
+        status = 206
     else:
         v_start, v_end, status = 0, file_size - 1, 200
 
-    length = v_end - v_start + 1
-
-    cdn_url = url  # already materialised above
+    length  = v_end - v_start + 1
+    cdn_url = url
 
     def _generate():
-        CHUNK = 2 << 20  # 2 MB per CDN fetch
+        CHUNK = 2 << 20
         pos = v_start
         while pos <= v_end:
             end = min(pos + CHUNK - 1, v_end)
             try:
                 data = mp4_faststart.serve_bytes(info, cdn_url, pos, end)
             except Exception as exc:
-                log.warning("stream proxy: error at v=%d token=%s: %s", pos, token, exc)
+                log.warning("fstream proxy: error v=%d token=%s: %s", pos, token, exc)
                 break
             if not data:
                 break
@@ -1234,7 +1253,7 @@ def stream_redirect(token: str):
     resp.headers["Content-Length"] = str(length)
     if status == 206:
         resp.headers["Content-Range"] = f"bytes {v_start}-{v_end}/{file_size}"
-    log.info("stream: token=%s → fast-start proxy bytes=%d-%d/%d (%.1fs) ua=%r",
+    log.info("fstream: token=%s bytes=%d-%d/%d (%.1fs) ua=%r",
              token, v_start, v_end, file_size, _t.monotonic() - started, ua)
     return resp
 
