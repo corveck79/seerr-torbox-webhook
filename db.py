@@ -351,6 +351,7 @@ def _migrate() -> None:
             ("year", "INTEGER"),
             ("debrid_provider", "TEXT DEFAULT 'torbox'"),
             ("rd_id", "TEXT"),
+            ("spore_tracks", "TEXT"),
         ]:
             if col not in vi_cols:
                 conn.execute(f"ALTER TABLE virtual_items ADD COLUMN {col} {typedef}")
@@ -716,7 +717,7 @@ def rekey_media_item(old_id: str, new_id: str, media_type: str) -> bool:
             return cur.rowcount > 0
         except Exception:
             conn.rollback()
-            # new_id already exists (UNIQUE conflict) — the unknown_ row is a duplicate;
+            # new_id already exists (UNIQUE conflict)  -  the unknown_ row is a duplicate;
             # just delete it so the canonical entry remains.
             try:
                 conn.execute(
@@ -954,6 +955,32 @@ def update_virtual_strm_path_prefix(old_prefix: str, new_prefix: str) -> int:
             count += 1
         conn.commit()
         return count
+
+
+def save_spore_tracks(token: str, tracks: dict) -> None:
+    """Persist audio/subtitle track info from ffprobe so stub regeneration can reuse it."""
+    import json as _json
+    with _connect() as conn:
+        conn.execute(
+            "UPDATE virtual_items SET spore_tracks=? WHERE token=?",
+            (_json.dumps(tracks), token),
+        )
+        conn.commit()
+
+
+def load_spore_tracks(token: str) -> dict | None:
+    """Return stored probe track info, or None if not yet probed."""
+    import json as _json
+    with _connect() as conn:
+        row = conn.execute(
+            "SELECT spore_tracks FROM virtual_items WHERE token=?", (token,)
+        ).fetchone()
+    if row and row["spore_tracks"]:
+        try:
+            return _json.loads(row["spore_tracks"])
+        except Exception:
+            return None
+    return None
 
 
 def touch_virtual_item(token: str) -> None:
@@ -1221,7 +1248,7 @@ def get_repair_items(limit: int = 200) -> list[dict]:
 
 
 def get_recently_unfixable_paths(hours: int = 24) -> set[str]:
-    """Return paths marked unfixable within the last N hours — used to skip re-trying."""
+    """Return paths marked unfixable within the last N hours  -  used to skip re-trying."""
     with _connect() as conn:
         rows = conn.execute(
             """SELECT path FROM repair_items
@@ -1266,7 +1293,7 @@ def list_users() -> list[dict]:
 def update_user(user_id: int, **fields) -> None:
     if not fields:
         return
-    # Core columns always allowed; plugin migrations may add extra columns —
+    # Core columns always allowed; plugin migrations may add extra columns  - 
     # allow any column that actually exists in the table so plugin fields work.
     _CORE = {"password_hash", "role", "quota_monthly", "auto_approve", "enabled", "region"}
     with _connect() as conn:

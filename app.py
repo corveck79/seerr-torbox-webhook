@@ -1208,17 +1208,20 @@ def spore_stream_proxy(token: str):
         try:
             res = _sp.run(
                 ["ffprobe", "-v", "quiet", "-print_format", "json",
-                 "-show_streams", cdn_url_],
+                 "-show_streams", "-show_format", cdn_url_],
                 capture_output=True, timeout=60,
             )
             if res.returncode != 0:
                 return
-            streams = _json.loads(res.stdout).get("streams", [])
-            audio = [s for s in streams if s.get("codec_type") == "audio"]
-            subs  = [s for s in streams if s.get("codec_type") == "subtitle"]
-            if audio or subs:
-                import strm_generator as _sg
-                _sg.update_stub_from_probe(tok, audio, subs)
+            data    = _json.loads(res.stdout)
+            streams = data.get("streams", [])
+            audio   = [s for s in streams if s.get("codec_type") == "audio"]
+            subs    = [s for s in streams if s.get("codec_type") == "subtitle"]
+            dur     = float(data.get("format", {}).get("duration", 0) or 0)
+            import strm_generator as _sg, db as _db
+            _db.save_spore_tracks(tok, {"audio": audio, "subs": subs, "duration_s": dur})
+            if audio or subs or dur:
+                _sg.update_stub_from_probe(tok, audio, subs, duration_s=dur or None)
         except Exception as exc:
             log.warning("spore-stream: post-build probe failed for %s: %s", tok, exc)
 

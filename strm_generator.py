@@ -261,8 +261,39 @@ def _cache_cdn_url(info_hash: str, ready_item: dict, title: str) -> None:
             import catbox as _catbox
             _catbox.cache_url(token, cdn_url)
             log.info("Preload: %s CDN URL cached", title)
+            _preload_spore(cdn_url, token)
     except Exception as exc:
         log.debug("Preload: CDN cache skipped for %s: %s", title, exc)
+
+
+def _preload_spore(cdn_url: str, token: str) -> None:
+    """Build fast-start cache and probe tracks for a newly preloaded torrent.
+    Runs in the preload thread so first Plex play is instant."""
+    if not settings.get("SPORE_ENABLED", cfg.SPORE_ENABLED):
+        return
+    try:
+        import mp4_faststart, json as _json, subprocess as _sp
+        ok = mp4_faststart.build_and_cache(cdn_url, token)
+        if not ok:
+            return
+        res = _sp.run(
+            ["ffprobe", "-v", "quiet", "-print_format", "json",
+             "-show_streams", "-show_format", cdn_url],
+            capture_output=True, timeout=60,
+        )
+        if res.returncode != 0:
+            return
+        data  = _json.loads(res.stdout)
+        streams = data.get("streams", [])
+        audio   = [s for s in streams if s.get("codec_type") == "audio"]
+        subs    = [s for s in streams if s.get("codec_type") == "subtitle"]
+        dur     = float(data.get("format", {}).get("duration", 0) or 0)
+        db.save_spore_tracks(token, {"audio": audio, "subs": subs, "duration_s": dur})
+        update_stub_from_probe(token, audio, subs, duration_s=dur or None)
+        log.info("Preload: spore probe done token=%s dur=%.0fs subs=%d",
+                 token, dur, len(subs))
+    except Exception as exc:
+        log.debug("Preload: spore probe failed token=%s: %s", token, exc)
 
 
 def _preload_torrent(info_hash: str, magnet: str, title: str) -> None:
@@ -811,13 +842,23 @@ def regenerate_spore_stubs(token: str | None = None) -> dict:
         mkv_path  = stub_dir / (strm_path.stem + ".mkv")
 
         try:
+            saved = db.load_spore_tracks(item["token"])
+            sub_tracks = [
+                {"codec": s.get("codec_name", "subrip"),
+                 "language": (s.get("tags") or {}).get("language", "und")[:3]}
+                for s in (saved or {}).get("subs", [])
+            ] or None
+            dur = float((saved or {}).get("duration_s") or 0) or 7200.0
             stub = make_stub_mkv(
                 item.get("title") or strm_path.stem,
                 item.get("quality"),
+                duration_sec=dur,
+                subtitle_tracks=sub_tracks,
             )
             mkv_path.write_bytes(stub)
             codec = _codec_id_for_quality(item.get("quality"))
-            log.info("Spore: regenerated stub %s (codec=%s)", mkv_path.name, codec)
+            log.info("Spore: regenerated stub %s (codec=%s subs=%d)",
+                     mkv_path.name, codec, len(sub_tracks or []))
             regenerated += 1
         except Exception as exc:
             log.warning("Spore regenerate: failed for %s: %s", strm_path.name, exc)
@@ -829,7 +870,8 @@ def regenerate_spore_stubs(token: str | None = None) -> dict:
 
 
 def update_stub_from_probe(token: str, audio_streams: list[dict],
-                            subtitle_streams: list[dict]) -> bool:
+                            subtitle_streams: list[dict],
+                            duration_s: float | None = None) -> bool:
     """Rewrite the stub MKV for token with real audio and subtitle tracks from ffprobe.
 
     Called after build_and_cache() completes so subsequent Plex analyses show
@@ -848,10 +890,8 @@ def update_stub_from_probe(token: str, audio_streams: list[dict],
     if not mkv_path.parent.exists():
         return False
 
-    # Keep audio_tracks=None so make_stub_mkv keeps the A_TRUEHD placeholder.
-    # A_TRUEHD forces Plex to always transcode instead of direct-streaming the
-    # stub (which has no real video data). Subtitle tracks are safe to update
-    # because they don't affect Plex's transcode/direct-stream decision.
+    # Keep A_TRUEHD placeholder for audio so Plex always invokes the transcoder
+    # instead of direct-playing the stub. Only subtitle tracks are updated.
     subtitle_tracks = [
         {
             "codec":    s.get("codec_name", "subrip"),
@@ -864,13 +904,14 @@ def update_stub_from_probe(token: str, audio_streams: list[dict],
         stub = make_stub_mkv(
             item.get("title") or strm_path.stem,
             item.get("quality"),
+            duration_sec=duration_s or 7200.0,
             audio_tracks=None,
             subtitle_tracks=subtitle_tracks or None,
         )
         mkv_path.write_bytes(stub)
         log.info(
             "Spore: updated stub for token=%s with %d audio + %d subtitle tracks",
-            token, len(audio_tracks), len(subtitle_tracks),
+            token, len(audio_streams), len(subtitle_tracks),
         )
         return True
     except Exception as exc:
