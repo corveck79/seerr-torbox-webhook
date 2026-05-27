@@ -65,6 +65,61 @@ configure_logging()
 log_buffer.install()
 log = logging.getLogger("mycelium")
 
+APP_VERSION = "1.8.0"
+
+RELEASES = [
+    {
+        "version": "1.8.0",
+        "date": "2026-05-26",
+        "notes": [
+            "Mycelium Spore: LD_PRELOAD interceptor voor Plex (stub MKV + on-demand TorBox stream)",
+            "Releases tab in admin met versiegeschiedenis",
+            "WEBHOOK_SECRET auto-generatie en copy-knop in admin",
+            "Setup wizard afgeschermd tot admin-only na eerste run",
+        ],
+    },
+    {
+        "version": "1.7.0",
+        "date": "2026-05-01",
+        "notes": [
+            "Trakt plugin: sync watchlist en ratings",
+            "Web Player plugin: in-browser afspeelvenster met subtitle picker",
+            "Plugin slot systeem voor frontend integratie",
+            "Arr-import: Radarr en Sonarr direct importeren",
+        ],
+    },
+    {
+        "version": "1.6.0",
+        "date": "2026-04-01",
+        "notes": [
+            "Multi-user authenticatie met rollen (admin/user)",
+            "OIDC/SSO ondersteuning",
+            "Catchup modus: automatisch terugvullen van gemiste episodes",
+            "Upgrader: automatische kwaliteitsupgrade naar hogere resolutie",
+        ],
+    },
+    {
+        "version": "1.5.0",
+        "date": "2026-03-01",
+        "notes": [
+            "Catbox lazy materialization engine: torrent on-demand bij afspeelverzoek",
+            "Playability state tracking per item (TB_429, NO_RELEASE, TIMEOUT, etc.)",
+            "Blacklist voor defecte info_hashes",
+            "Season pack consolidatie",
+        ],
+    },
+    {
+        "version": "1.0.0",
+        "date": "2026-01-01",
+        "notes": [
+            "Eerste publieke release",
+            "Seerr webhook intake, TorBox integratie, .strm generatie",
+            "React SPA met Discover, Library, Requests, Wanted tabs",
+            "Jellyfin integratie via .strm bestanden",
+        ],
+    },
+]
+
 import settings as _settings_mod
 import os as _os
 LITE_MODE: bool = (
@@ -575,6 +630,8 @@ def ui_dashboard():
         last_cleanup=db.get_last_cleanup_run(),
         activity=db.get_activity(50),
         config=cfg,
+        app_version=APP_VERSION,
+        releases=RELEASES,
     )
 
 
@@ -888,6 +945,26 @@ def ui_api_repair_strms():
       - otherwise → delete the .strm and immediately requeue via processor
     """
     result = strm_generator.repair_expired_strms(media_type="movie")
+    return jsonify(**result)
+
+
+@app.post("/ui/api/spore/backfill")
+@_csrf.exempt
+@auth.require_role("admin")
+def ui_api_spore_backfill():
+    """Generate missing Spore stub .mkv + .minfo files for all existing virtual_items."""
+    result = strm_generator.backfill_spore_stubs()
+    return jsonify(**result)
+
+
+@app.post("/ui/api/spore/regenerate")
+@_csrf.exempt
+@auth.require_role("admin")
+def ui_api_spore_regenerate():
+    """Force-regenerate stub MKVs with correct codec metadata.
+    Pass ?token=<token> to regenerate a single item, or omit for all items."""
+    token = request.args.get("token") or (request.json or {}).get("token")
+    result = strm_generator.regenerate_spore_stubs(token=token)
     return jsonify(**result)
 
 

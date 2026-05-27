@@ -14,7 +14,7 @@ import jellyfin
 import settings
 import torbox as torbox_mod
 import config as cfg
-from config import MEDIA_PATH, TORBOX_BASE_URL
+from config import MEDIA_PATH, TORBOX_BASE_URL, SPORE_MEDIA_PATH
 
 log = logging.getLogger(__name__)
 
@@ -473,8 +473,19 @@ def _ebml_el(id_bytes: bytes, data: bytes) -> bytes:
     return id_bytes + _ebml_vint(len(data)) + data
 
 
+def _codec_id_for_quality(quality: str | None) -> str:
+    """Return MKV CodecID string based on quality hint.
+    4K content is virtually always HEVC; 1080p/720p defaults to H.264."""
+    if quality:
+        q = quality.lower()
+        if '2160' in q or '4k' in q or 'uhd' in q:
+            return 'V_MPEGH/ISO/HEVC'
+    return 'V_MPEG4/ISO/AVC'
+
+
 def make_stub_mkv(title: str, quality: str | None = None,
-                   duration_sec: float = 7200.0) -> bytes:
+                   duration_sec: float = 7200.0,
+                   codec_id: str | None = None) -> bytes:
     """Generate a minimal valid MKV file for Plex scanning.
 
     Contains EBML header + Segment Info (title, duration) + one fake video
@@ -491,6 +502,9 @@ def make_stub_mkv(title: str, quality: str | None = None,
             width, height = 1280, 720
         elif '480' in q:
             width, height = 854, 480
+
+    if codec_id is None:
+        codec_id = _codec_id_for_quality(quality)
 
     # EBML header
     ebml_data = (
@@ -527,7 +541,7 @@ def make_stub_mkv(title: str, quality: str | None = None,
         _ebml_el(b'\x83', _ebml_uint(1)) +            # TrackType = video
         _ebml_el(b'\xB9', _ebml_uint(1)) +            # FlagEnabled
         _ebml_el(b'\x88', _ebml_uint(1)) +            # FlagDefault
-        _ebml_el(b'\x86', b'V_MPEG4/ISO/AVC') +       # CodecID
+        _ebml_el(b'\x86', codec_id.encode()) +            # CodecID
         _ebml_el(b'\xE0', video_data)                  # Video
     )
     tracks_el = _ebml_el(b'\x16\x54\xAE\x6B',
@@ -545,29 +559,45 @@ def make_stub_mkv(title: str, quality: str | None = None,
     return ebml_header + segment
 
 
+def _spore_stub_dir(strm_path: Path) -> Path:
+    """Return the Spore stub directory for a given .strm path.
+
+    Mirrors the relative path under MEDIA_PATH into SPORE_MEDIA_PATH so that
+    Plex can be pointed at a clean directory containing only .mkv stubs.
+    Example: /data/media/movies/Foo/Foo.strm -> /data/plex-media/movies/Foo/
+    """
+    media_root = Path(MEDIA_PATH)
+    spore_root = Path(SPORE_MEDIA_PATH)
+    try:
+        rel = strm_path.parent.relative_to(media_root)
+        return spore_root / rel
+    except ValueError:
+        return spore_root / strm_path.parent.name
+
+
 def _write_spore_stubs(strm_path: Path, token: str,
                         title: str, quality: str | None,
                         size_gb: float | None) -> None:
-    """Write .mkv stub and .minfo sidecar into a hidden .plex/ subfolder.
+    """Write .mkv stub and .minfo sidecar into SPORE_MEDIA_PATH.
 
-    The .plex/ directory is invisible to Jellyfin (starts with '.') but
-    discoverable by Plex when its library is pointed at the same media path.
-    The Spore interceptor (.so) reads the .minfo to resolve CDN bytes.
+    Mirrors the media directory structure so Plex can be pointed at
+    SPORE_MEDIA_PATH as a clean library root (no .strm files, no artwork).
+    Jellyfin keeps using MEDIA_PATH with .strm files unchanged.
     """
     if not settings.get("SPORE_ENABLED", cfg.SPORE_ENABLED):
         return
 
-    plex_dir = strm_path.parent / ".plex"
-    mkv_path   = plex_dir / (strm_path.stem + ".mkv")
-    minfo_path = plex_dir / (strm_path.stem + ".minfo")
+    stub_dir   = _spore_stub_dir(strm_path)
+    mkv_path   = stub_dir / (strm_path.stem + ".mkv")
+    minfo_path = stub_dir / (strm_path.stem + ".minfo")
 
     if mkv_path.exists() and minfo_path.exists():
         return
 
     try:
-        plex_dir.mkdir(parents=True, exist_ok=True)
+        stub_dir.mkdir(parents=True, exist_ok=True)
     except Exception as exc:
-        log.warning("Spore: could not create .plex dir %s: %s", plex_dir, exc)
+        log.warning("Spore: could not create stub dir %s: %s", stub_dir, exc)
         return
 
     # Write stub .mkv
@@ -575,7 +605,8 @@ def _write_spore_stubs(strm_path: Path, token: str,
         try:
             stub = make_stub_mkv(title, quality)
             mkv_path.write_bytes(stub)
-            log.debug("Spore: wrote stub MKV %s (%d bytes)", mkv_path.name, len(stub))
+            log.debug("Spore: wrote stub MKV %s (%d bytes, codec=%s)",
+                      mkv_path.name, len(stub), _codec_id_for_quality(quality))
         except Exception as exc:
             log.warning("Spore: could not write stub MKV %s: %s", mkv_path, exc)
             return
@@ -595,18 +626,105 @@ def _write_spore_stubs(strm_path: Path, token: str,
 
 def _delete_spore_stubs(strm_path: Path) -> None:
     """Remove .mkv stub and .minfo for a given .strm path (if they exist)."""
-    plex_dir = strm_path.parent / ".plex"
+    stub_dir = _spore_stub_dir(strm_path)
     for ext in (".mkv", ".minfo"):
-        stub = plex_dir / (strm_path.stem + ext)
+        stub = stub_dir / (strm_path.stem + ext)
         try:
             stub.unlink(missing_ok=True)
         except Exception as exc:
             log.warning("Spore: could not delete stub %s: %s", stub, exc)
-    # Remove .plex dir if now empty
     try:
-        plex_dir.rmdir()
+        stub_dir.rmdir()
     except OSError:
-        pass  # not empty or doesn't exist - both fine
+        pass
+
+
+def backfill_spore_stubs() -> dict:
+    """Generate missing Spore stubs for all existing virtual_items.
+
+    Safe to call multiple times - skips items that already have both
+    .mkv and .minfo in SPORE_MEDIA_PATH.
+    Returns {total, created, skipped, errors}.
+    """
+    items = db.get_all_virtual_items()
+    total = len(items)
+    created = skipped = errors = 0
+
+    for item in items:
+        strm_path_str = item.get("strm_path")
+        if not strm_path_str:
+            skipped += 1
+            continue
+
+        strm_path  = Path(strm_path_str)
+        stub_dir   = _spore_stub_dir(strm_path)
+        mkv_path   = stub_dir / (strm_path.stem + ".mkv")
+        minfo_path = stub_dir / (strm_path.stem + ".minfo")
+
+        if mkv_path.exists() and minfo_path.exists():
+            skipped += 1
+            continue
+
+        try:
+            _write_spore_stubs(
+                strm_path,
+                item["token"],
+                item.get("title") or strm_path.stem,
+                item.get("quality"),
+                item.get("size_gb"),
+            )
+            created += 1
+        except Exception as exc:
+            log.warning("Spore backfill: failed for %s: %s", strm_path.name, exc)
+            errors += 1
+
+    log.info("Spore backfill: total=%d created=%d skipped=%d errors=%d",
+             total, created, skipped, errors)
+    return {"total": total, "created": created, "skipped": skipped, "errors": errors}
+
+
+def regenerate_spore_stubs(token: str | None = None) -> dict:
+    """Force-regenerate stub MKVs for all items (or a single token).
+
+    Deletes and rewrites the .mkv stub so codec metadata is corrected.
+    Does NOT touch .minfo files (token/size stay unchanged).
+    Returns {total, regenerated, skipped, errors}.
+    """
+    if token:
+        item = db.get_virtual_item(token)
+        items = [item] if item else []
+    else:
+        items = db.get_all_virtual_items()
+
+    total = len(items)
+    regenerated = skipped = errors = 0
+
+    for item in items:
+        strm_path_str = item.get("strm_path")
+        if not strm_path_str:
+            skipped += 1
+            continue
+
+        strm_path = Path(strm_path_str)
+        stub_dir  = _spore_stub_dir(strm_path)
+        mkv_path  = stub_dir / (strm_path.stem + ".mkv")
+
+        try:
+            stub = make_stub_mkv(
+                item.get("title") or strm_path.stem,
+                item.get("quality"),
+            )
+            mkv_path.write_bytes(stub)
+            codec = _codec_id_for_quality(item.get("quality"))
+            log.info("Spore: regenerated stub %s (codec=%s)", mkv_path.name, codec)
+            regenerated += 1
+        except Exception as exc:
+            log.warning("Spore regenerate: failed for %s: %s", strm_path.name, exc)
+            errors += 1
+
+    log.info("Spore regenerate: total=%d regenerated=%d skipped=%d errors=%d",
+             total, regenerated, skipped, errors)
+    return {"total": total, "regenerated": regenerated, "skipped": skipped, "errors": errors}
 
 
 def _write_strm(path: Path, url: str) -> bool:
