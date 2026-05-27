@@ -1,0 +1,2 @@
+/* Empty version script - no versioned symbol exports needed. */
+{ global: *; };

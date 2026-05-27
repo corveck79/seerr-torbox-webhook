@@ -45,7 +45,7 @@ _HEVC_RE  = re.compile(r"\b(hevc|x265|h\.?265)\b", re.IGNORECASE)
 # DV/DoVi but no HDR10 keyword alongside it. Profile 8 (DV + HDR10) is safe
 # and is NOT matched here.
 _DV_RE    = re.compile(r"\b(dovi|dolby[\s.]?vision|\.dv\.)\b", re.IGNORECASE)
-_HDR10_RE = re.compile(r"\bhdr10?\b", re.IGNORECASE)
+_HDR10_RE = re.compile(r"\bhdr10(?!\+)\b", re.IGNORECASE)
 _SEEDERS_RE = re.compile(r"👤\s*(\d+)")
 _SIZE_RE = re.compile(r"💾\s*([\d.]+)\s*(GB|MB)", re.IGNORECASE)
 
@@ -245,7 +245,7 @@ def rank_streams(
         if filtered:
             candidates = filtered
         elif strict_cam:
-            log.warning("Only cam/telesync candidates available and STRICT_NO_CAM is on — rejecting all")
+            log.warning("Only cam/telesync candidates available and STRICT_NO_CAM is on  -  rejecting all")
             return []
         else:
             log.warning("Only cam/telesync candidates available; allowing them")
