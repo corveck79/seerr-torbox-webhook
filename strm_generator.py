@@ -848,15 +848,10 @@ def update_stub_from_probe(token: str, audio_streams: list[dict],
     if not mkv_path.parent.exists():
         return False
 
-    audio_tracks = [
-        {
-            "codec":       s.get("codec_name", "eac3"),
-            "language":    (s.get("tags") or {}).get("language", "und")[:3],
-            "channels":    int(s.get("channels") or 2),
-            "sample_rate": float(s.get("sample_rate") or 48000),
-        }
-        for s in audio_streams
-    ]
+    # Keep audio_tracks=None so make_stub_mkv keeps the A_TRUEHD placeholder.
+    # A_TRUEHD forces Plex to always transcode instead of direct-streaming the
+    # stub (which has no real video data). Subtitle tracks are safe to update
+    # because they don't affect Plex's transcode/direct-stream decision.
     subtitle_tracks = [
         {
             "codec":    s.get("codec_name", "subrip"),
@@ -869,7 +864,7 @@ def update_stub_from_probe(token: str, audio_streams: list[dict],
         stub = make_stub_mkv(
             item.get("title") or strm_path.stem,
             item.get("quality"),
-            audio_tracks=audio_tracks or None,
+            audio_tracks=None,
             subtitle_tracks=subtitle_tracks or None,
         )
         mkv_path.write_bytes(stub)
