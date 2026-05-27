@@ -1298,6 +1298,12 @@ def spore_stream_proxy(token: str):
 
         return resp
 
+    # CDN file is already moov-first: redirect directly, no proxy overhead
+    if info.get("already_fast"):
+        _spore_cold_sizes.pop(token, None)
+        log.info("spore-stream: token=%s already fast-start, 302 to CDN", token)
+        return redirect(cdn_url, code=302)
+
     file_size = info["cdn_size"]
     range_hdr = request.headers.get("Range")
 

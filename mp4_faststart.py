@@ -159,7 +159,17 @@ def build_and_cache(cdn_url: str, token: str) -> bool:
 
             moov_in_tail = _find_box_in(tail, b"moov")
             if moov_in_tail < 0:
-                log.warning("FastStart: no moov in last %dMB for token %s", _MOOV_FETCH_MB, token)
+                # moov not at end - check if file is already fast-start (moov near beginning)
+                head_bytes = min(_MOOV_FETCH_MB * 1 << 20, cdn_size)
+                head_data = _get(cdn_url, 0, head_bytes - 1)
+                moov_in_head = _find_box_in(head_data, b"moov")
+                if moov_in_head >= 0:
+                    # Already fast-start: write sentinel .fsh with moov_size=0
+                    meta = struct.pack(">QQQ", 0, 0, cdn_size)
+                    path.write_bytes(meta)
+                    log.info("FastStart: CDN already fast-start for token=%s, stored sentinel", token)
+                    return True
+                log.warning("FastStart: no moov found anywhere for token %s", token)
                 return False
 
             _, moov_size, _ = _box_header(tail, moov_in_tail)
@@ -200,11 +210,12 @@ def load(token: str) -> dict | None:
         ftyp_size, moov_size, cdn_size = struct.unpack_from(">QQQ", raw, 0)
         header = raw[24:]
         return {
-            "ftyp_size": ftyp_size,
-            "moov_size": moov_size,
-            "cdn_size":  cdn_size,
-            "header":    header,          # ftyp + rewritten moov
-            "header_size": len(header),
+            "ftyp_size":    ftyp_size,
+            "moov_size":    moov_size,
+            "cdn_size":     cdn_size,
+            "header":       header,
+            "header_size":  len(header),
+            "already_fast": moov_size == 0,  # sentinel: CDN already moov-first
         }
     except Exception as exc:
         log.warning("FastStart: load failed for %s: %s", token, exc)
