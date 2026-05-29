@@ -13,14 +13,36 @@ echo "$(date '+%H:%M:%S') WRAP started" >> "$SPORE_LOG"
 # (known Plex bug). Discover and export it here as a fallback so EAE can init.
 echo "$(date '+%H:%M:%S') WRAP EAE_ROOT=${EAE_ROOT:-(not set)}" >> "$SPORE_LOG"
 if [ -z "$EAE_ROOT" ]; then
-    _eae_dir=$(find /tmp /var/tmp /run -maxdepth 6 -type d \
-        \( -name "EasyAudioEncoder" -o -name "*EAE*" \) 2>/dev/null | head -1)
-    if [ -n "$_eae_dir" ]; then
-        export EAE_ROOT="$_eae_dir"
-        echo "$(date '+%H:%M:%S') WRAP discovered EAE_ROOT=$EAE_ROOT" >> "$SPORE_LOG"
-    else
-        echo "$(date '+%H:%M:%S') WRAP WARNING: EAE watchfolder not found in /tmp" >> "$SPORE_LOG"
-    fi
+    # 1. Glob patterns -- faster than find, no root required
+    for _eae_try in \
+        /run/plex-temp/pms-*/EasyAudioEncoder \
+        /run/pms-*/EasyAudioEncoder \
+        /tmp/pms-*/EasyAudioEncoder \
+        /var/tmp/pms-*/EasyAudioEncoder; do
+        if [ -d "$_eae_try" ]; then
+            export EAE_ROOT="$_eae_try"
+            echo "$(date '+%H:%M:%S') WRAP EAE_ROOT via glob: $EAE_ROOT" >> "$SPORE_LOG"
+            break
+        fi
+    done
+fi
+if [ -z "$EAE_ROOT" ]; then
+    # 2. Read EAE_ROOT from Plex Media Server process environment
+    for _pid in $(pgrep -f "Plex Media Server" 2>/dev/null | head -5); do
+        [ -r "/proc/$_pid/environ" ] || continue
+        _val=$(tr '\0' '\n' < "/proc/$_pid/environ" 2>/dev/null \
+               | grep "^EAE_ROOT=" | cut -d= -f2- | head -1)
+        if [ -n "$_val" ] && [ -d "$_val" ]; then
+            export EAE_ROOT="$_val"
+            echo "$(date '+%H:%M:%S') WRAP EAE_ROOT from PMS pid=$_pid: $EAE_ROOT" >> "$SPORE_LOG"
+            break
+        fi
+    done
+fi
+if [ -z "$EAE_ROOT" ]; then
+    echo "$(date '+%H:%M:%S') WRAP WARNING: EAE_ROOT not found" >> "$SPORE_LOG"
+    echo "$(date '+%H:%M:%S') WRAP /run: $(ls /run 2>&1 | tr '\n' ' ')" >> "$SPORE_LOG"
+    echo "$(date '+%H:%M:%S') WRAP /run/plex-temp: $(ls /run/plex-temp 2>&1 | tr '\n' ' ')" >> "$SPORE_LOG"
 fi
 
 newargs=()
