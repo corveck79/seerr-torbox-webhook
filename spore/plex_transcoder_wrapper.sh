@@ -67,14 +67,17 @@ if [ "$spore_replaced" = "1" ]; then
             next_idx=$((idx + 1))
             next_arg="${newargs[$next_idx]:-}"
 
-            # Before -i: remove -codec:N truehd_eae / dts_ma_eae pairs
+            # Before -i: remove -codec:N truehd_eae / dts_ma_eae / pcm_s* pairs.
+            # Plex injects pcm_s16le (or pcm_s24le etc) when the stub declares PCM
+            # audio. The CDN file has EAC3, so this hint is wrong and conflicts with
+            # the -codec:N eac3 hint we inject below, causing FFmpeg to crash.
             if [ "$idx" -lt "$i_pos" ] && [[ "$arg" =~ ^-codec:[0-9]+$ ]] && \
-               [[ "$next_arg" =~ ^(truehd|dts_ma)_eae$ ]]; then
+               [[ "$next_arg" =~ ^((truehd|dts_ma)_eae|pcm_s[0-9]+(le|be))$ ]]; then
                 skip_next=1
                 stream_n="${arg#-codec:}"
                 removed_eae_indices+=("$stream_n")
                 echo "$(date '+%H:%M:%S') WRAP removed pre-input: $arg $next_arg" >> "$SPORE_LOG"
-                echo "SPORE-WRAP: removed pre-input EAE hint: $arg $next_arg" >&2
+                echo "SPORE-WRAP: removed pre-input hint: $arg $next_arg" >&2
                 continue
             fi
             # Before -i: remove -eae_prefix:N SESSION_ pairs
