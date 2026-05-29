@@ -1090,16 +1090,18 @@ def update_stub_from_probe(token: str, audio_streams: list[dict],
     if not mkv_path.parent.exists():
         return False
 
-    # Do NOT write video codec_private (SPS/PPS) to the stub.
-    # With real HDR10 SPS/PPS, Plex correctly identifies the content as 4K HDR10
-    # HEVC + TrueHD 7.1 and Shield TV (with AV receiver) chooses Direct Play,
-    # bypassing the wrapper entirely and returning black screen (stub has no real
-    # frames). By keeping the stub without SPS/PPS, Plex cannot determine the
-    # exact profile/level and falls back to transcoding for all clients.
+    # Include real CodecPrivate (avcC/hvcC) from the fast-start cache.
+    # This lets Plex know the exact video profile/level and choose video-copy
+    # instead of re-encoding (saves significant CPU per session).
+    # Direct Play is NOT possible because the stub uses a PCM 16ch audio
+    # placeholder that no device can pass through HDMI -- the transcoder is
+    # always invoked, so the wrapper always runs.
+    import mp4_faststart as _mp4fs
+    v_cp = _mp4fs.extract_codec_private(token)
 
-    # Keep audio_tracks=None so make_stub_mkv uses the TrueHD 8ch placeholder.
-    # TrueHD forces Plex to invoke the external transcoder (our wrapper intercepts
-    # -i stub.mkv -> spore-stream URL). Passing real EAC3 tracks would allow
+    # Keep audio_tracks=None so make_stub_mkv uses the PCM 16ch placeholder.
+    # PCM 16ch forces Plex to invoke the external transcoder (our wrapper
+    # rewrites -i stub.mkv -> spore-stream URL). Real audio tracks would allow
     # Direct Play on Shield/Android, bypassing the wrapper entirely.
     subtitle_tracks = [
         {
@@ -1132,7 +1134,7 @@ def update_stub_from_probe(token: str, audio_streams: list[dict],
             duration_sec=duration_s or 7200.0,
             audio_tracks=None,
             subtitle_tracks=subtitle_tracks or None,
-            # video_codec_private intentionally omitted: see comment above
+            video_codec_private=v_cp,
         )
         mkv_path.write_bytes(stub)
         log.info(
